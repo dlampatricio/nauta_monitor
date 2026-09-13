@@ -1,0 +1,28 @@
+services:
+  nauta-monitor:
+    build: .
+    image: nauta-monitor:latest
+    container_name: nauta-monitor
+    restart: unless-stopped
+    environment:
+      - TZ=America/Havana
+      # Credenciales opcionales vía .env (si no están, se leen de config.toml).
+      - NAUTA_USERNAME=${NAUTA_USERNAME:-}
+      - NAUTA_PASS=${NAUTA_PASS:-}
+    volumes:
+      # Credenciales y tarifa: configura config.toml en el host antes de arrancar.
+      - ./config.toml:/app/config.toml:ro
+      # Historial persistente entre reinicios del contenedor.
+      - ./data:/app/data
+    command: ["nauta-monitor", "watch", "--history", "/app/data/history.jsonl"]
+    healthcheck:
+      test: ["CMD", "nauta-monitor", "once", "--no-speedtest", "--no-history", "--json"]
+      interval: 5m
+      timeout: 30s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
