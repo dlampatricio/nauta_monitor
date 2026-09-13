@@ -1,0 +1,37 @@
+# Copia este archivo a "config.toml" y rellena tus datos.
+# La contraseña se puede omitir aquí y pasar por la variable de entorno NAUTA_PASS.
+
+[nauta]
+username = "pepelam@nauta.com.cu"
+# password = "Mad3l4m65."
+
+# Crédito CUPs consumidos por cada hora de servicio (tu tarifa).
+cup_per_hour = 12.5
+
+# Segundos entre consultas de saldo al portal seguro.
+saldo_interval = 3600
+
+# Segundos entre pruebas de velocidad real. Pon 0 para desactivarlas.
+speedtest_interval = 1800
+
+[speedtest]
+# Servidor LibreSpeed de ETECSA (configurable si no es alcanzable desde tu red).
+base_url = "http://speedtest.cd.etecsa.cu/"
+dl_url = "garbage.php"
+ul_url = "empty.php"
+ping_url = "empty.php"
+get_ip_url = "getIP.php"
+# Chunks de 1 MiB descargados en cada prueba (max 1024).
+download_chunks = 200
+# Peso del payload de subida en KiB.
+upload_kib = 1024
+# Peticiones simultáneas para saturar el enlace.
+concurrent = 3
+# Duración máxima de descarga/subida por prueba en segundos.
+max_duration = 20
+
+[alerts]
+# Alertar cuando queden menos de estas horas de servicio.
+min_balance_hours = 24
+# Comando opcional ejecutado al dispararse la alerta (p. ej. notify-send '...').
+# on_alert = "notify-send 'Nauta' 'Quedan menos de 24 horas'"

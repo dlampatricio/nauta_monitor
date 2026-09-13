@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nauta-monitor"
+version = "0.1.0"
+description = "Monitor de cuenta Nauta Hogar: saldo, horas restantes y velocidad real desde la terminal."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+dependencies = [
+    "requests>=2.32",
+"beautifulsoup4>=4.13",
+"html5lib>=1.1",
+"rich>=13.0",
+    'tomli>=2.0; python_version < "3.11"',
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+nauta-monitor = "nauta_monitor.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["nauta_monitor*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

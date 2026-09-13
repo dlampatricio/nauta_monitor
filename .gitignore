@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+dist/
+build/
+
+# Credenciales: nunca subir al repositorio
+config.toml
+.env
+
+# Historiales generados por la app
+history.jsonl
+
+# Volumen de datos local (docker compose) / historial del contenedor
+data/
