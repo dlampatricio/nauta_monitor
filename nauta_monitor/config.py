@@ -18,12 +18,12 @@ class ConfigError(Exception):
 @dataclass
 class SpeedConfig:
     base_url: str = "http://speedtest.cd.etecsa.cu/"
-    dl_url: str = "garbage.php"
-    ul_url: str = "empty.php"
-    ping_url: str = "empty.php"
-    get_ip_url: str = "getIP.php"
+    dl_url: str = "backend/garbage.php"
+    ul_url: str = "backend/empty.php"
+    ping_url: str = "backend/empty.php"
+    get_ip_url: str = "backend/getIP.php"
     download_chunks: int = 200
-    upload_kib: int = 1024
+    upload_kib: int = 256
     concurrent: int = 3
     max_duration: float = 20.0
 
@@ -62,12 +62,12 @@ def load_config(path: str | Path | None = None) -> Config:
         "nauta": {"cup_per_hour": 12.5, "saldo_interval": 3600, "speedtest_interval": 1800},
         "speedtest": {
             "base_url": "http://speedtest.cd.etecsa.cu/",
-            "dl_url": "garbage.php",
-            "ul_url": "empty.php",
-            "ping_url": "empty.php",
-            "get_ip_url": "getIP.php",
+            "dl_url": "backend/garbage.php",
+            "ul_url": "backend/empty.php",
+            "ping_url": "backend/empty.php",
+            "get_ip_url": "backend/getIP.php",
             "download_chunks": 200,
-            "upload_kib": 1024,
+            "upload_kib": 256,
             "concurrent": 3,
             "max_duration": 20.0,
         },
@@ -94,10 +94,10 @@ def load_config(path: str | Path | None = None) -> Config:
         history_path=str(nauta.get("history_path", "history.jsonl")),
         speedtest=SpeedConfig(
             base_url=speedtest.get("base_url", "http://speedtest.cd.etecsa.cu/"),
-            dl_url=speedtest.get("dl_url", "garbage.php"),
-            ul_url=speedtest.get("ul_url", "empty.php"),
-            ping_url=speedtest.get("ping_url", "empty.php"),
-            get_ip_url=speedtest.get("get_ip_url", "getIP.php"),
+            dl_url=speedtest.get("dl_url", "backend/garbage.php"),
+            ul_url=speedtest.get("ul_url", "backend/empty.php"),
+            ping_url=speedtest.get("ping_url", "backend/empty.php"),
+            get_ip_url=speedtest.get("get_ip_url", "backend/getIP.php"),
             download_chunks=int(speedtest.get("download_chunks", 200)),
             upload_kib=int(speedtest.get("upload_kib", 1024)),
             concurrent=int(speedtest.get("concurrent", 3)),

@@ -1,9 +1,16 @@
 from __future__ import annotations
 
+import ssl
 from dataclasses import dataclass
+
+import urllib3
 
 import requests
 from bs4 import BeautifulSoup
+
+from requests.adapters import HTTPAdapter
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 from nauta_monitor.parser import AccountInfo, find_error, parse_account_info
 
@@ -38,12 +45,28 @@ class PortalSession:
     wlan_user_ip: str
 
 
+def _etecsa_ssl_context() -> ssl.SSLContext:
+    context = ssl.create_default_context()
+    context.check_hostname = False
+    context.verify_mode = ssl.CERT_NONE
+    context.set_ciphers("DEFAULT@SECLEVEL=0")
+    return context
+
+
+class _EtecsaAdapter(HTTPAdapter):
+    def init_poolmanager(self, *args, **kwargs):
+        kwargs["ssl_context"] = _etecsa_ssl_context()
+        return super().init_poolmanager(*args, **kwargs)
+
+
 class SecurePortalClient:
     def __init__(self, base_url: str | None = None, timeout: float = 20.0):
         self._base_url = (base_url or BASE_URL).rstrip("/")
         self._query_servlet = f"{self._base_url}/EtecsaQueryServlet"
         self._session = requests.Session()
         self._session.headers.update(_HEADERS)
+        self._session.verify = False
+        self._session.mount("https://", _EtecsaAdapter())
         self._timeout = timeout
 
     def init_session(self) -> PortalSession:

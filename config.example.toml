@@ -17,14 +17,14 @@ speedtest_interval = 1800
 [speedtest]
 # Servidor LibreSpeed de ETECSA (configurable si no es alcanzable desde tu red).
 base_url = "http://speedtest.cd.etecsa.cu/"
-dl_url = "garbage.php"
-ul_url = "empty.php"
-ping_url = "empty.php"
-get_ip_url = "getIP.php"
+dl_url = "backend/garbage.php"
+ul_url = "backend/empty.php"
+ping_url = "backend/empty.php"
+get_ip_url = "backend/getIP.php"
 # Chunks de 1 MiB descargados en cada prueba (max 1024).
 download_chunks = 200
 # Peso del payload de subida en KiB.
-upload_kib = 1024
+upload_kib = 256
 # Peticiones simultáneas para saturar el enlace.
 concurrent = 3
 # Duración máxima de descarga/subida por prueba en segundos.

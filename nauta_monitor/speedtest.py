@@ -78,23 +78,30 @@ class LibreSpeedClient:
         url = f"{urljoin(self._base, self._dl_url)}?ckSize={self._download_chunks}"
         stop = threading.Event()
         measured: list[tuple[int, float]] = []
+        failures = 0
 
         def worker() -> None:
+            nonlocal failures
             while not stop.is_set():
                 start = time.perf_counter()
                 total = 0
                 try:
                     response = self._session.get(url, stream=True, timeout=self._timeout)
                     with response:
+                        response.raise_for_status()
                         for chunk in response.iter_content(65536):
                             if stop.is_set():
                                 break
                             total += len(chunk)
                             if time.perf_counter() - start >= 5.0:
                                 break
+                    failures = 0
                 except requests.RequestException:
-                    stop.set()
-                    return
+                    failures += 1
+                    if failures >= 3:
+                        stop.set()
+                    time.sleep(0.2)
+                    continue
                 elapsed = time.perf_counter() - start
                 if total and elapsed > 0:
                     measured.append((total, elapsed))
@@ -117,19 +124,26 @@ class LibreSpeedClient:
     def _measure_upload(self) -> float | None:
         url = urljoin(self._base, self._ul_url)
         payload = os.urandom(self._upload_kib * 1024)
+        timeout = max(self._timeout, (self._upload_kib * 1024) / 64_000)
         stop = threading.Event()
         measured: list[tuple[int, float]] = []
+        failures = 0
 
         def worker() -> None:
+            nonlocal failures
             while not stop.is_set():
                 start = time.perf_counter()
                 try:
-                    response = self._session.post(url, data=payload, timeout=self._timeout)
+                    response = self._session.post(url, data=payload, timeout=timeout)
                     if not response.ok:
                         raise requests.RequestException(f"HTTP {response.status_code}")
+                    failures = 0
                 except requests.RequestException:
-                    stop.set()
-                    return
+                    failures += 1
+                    if failures >= 3:
+                        stop.set()
+                    time.sleep(0.2)
+                    continue
                 elapsed = time.perf_counter() - start
                 if elapsed > 0:
                     measured.append((len(payload), elapsed))
