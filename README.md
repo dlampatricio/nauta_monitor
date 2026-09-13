@@ -97,6 +97,22 @@ docker compose logs nauta-monitor --tail 20    # última línea de saldo
 - Zona horaria configurable con `TZ` (por defecto `America/Havana`).
 - Logs del contenedor rotan automáticamente (`json-file`, máx 10 MiB × 3).
 
+### Imagen publicada en GHCR (CI)
+
+El workflow `.github/workflows/docker-image.yml` compila la imagen en GitHub
+Actions y la publica en `ghcr.io/<dueño>/nauta_monitor` con los tags `latest`
+(rama por defecto), SHA del commit y `vX.Y.Z` (tags git). Esto permite
+desplegar sin acceso a Docker Hub (bloqueado en algunas redes, p. ej. Nauta):
+
+```bash
+# En una máquina sin acceso a Docker Hub:
+docker compose -f docker-compose.yml -f deploy/docker-compose.server.yml up -d
+# o con el Makefile:  make pull && make deploy
+```
+
+Para desarrollo local (con acceso normal a Docker Hub) se sigue usando
+`make up`, que compila con `build: .`.
+
 ## Homeserver: dashboard en la consola (laptop Ubuntu)
 
 El monitor corre en Docker; la **pantalla solo ve**. `deploy/` contiene los
@@ -112,7 +128,7 @@ pantalla de la laptop (tty1, autologin + tmux "dash")
 Toda la preparación del servidor (una vez):
 
 ```bash
-sudo apt update && sudo apt install -y tmux htop jq docker.io
+sudo apt update && sudo apt install -y tmux htop jq docker.io make docker-compose-plugin
 sudo usermod -aG docker $USER   # y vuelve a entrar a la sesión
 
 git clone <repo> /opt/nauta-monitor
@@ -120,12 +136,25 @@ cd /opt/nauta-monitor
 cp .env.example .env
 cp config.example.toml config.toml && nano config.toml   # credenciales
 mkdir data
-make up                          # arranca el contenedor
+make pull                         # baja la imagen de GHCR (Docker Hub está bloqueado)
+make deploy                       # arranca el contenedor
+make logs                         # verifica la primera línea de saldo
 
 chmod +x deploy/*.sh
 ./deploy/install_dashboard.sh    # autologin tty1 + pantalla que no se apaga
 sudo reboot                      # al encender aparece el dashboard
 ```
+
+> **¿Por qué `make pull` y no `make up`?** En la red Nauta Docker Hub devuelve
+> `403 Forbidden`. La imagen se construye en **GitHub Actions** y se publica en
+> **GHCR** (`ghcr.io/<dueño>/nauta_monitor`); el homelab solo la descarga. El
+> push a `master` dispara el build automáticamente (pestaña *Actions* del repo);
+> también puedes dispararlo a mano desde *Actions → docker-image →
+> Run workflow*.
+
+Si algún día GHCR exigiera autenticación para el `pull` (hoy no: la imagen es
+pública), haz `docker login ghcr.io -u <usuario>` con un token de GitHub con
+scope `read:packages`.
 
 Atajos tmux: `Ctrl-b d` (detach, la sesión sigue viva), `Ctrl-b %`/`"` (partir
 paneles), `Ctrl-b o` (saltar panes), `tmux attach -t dash` (volver).

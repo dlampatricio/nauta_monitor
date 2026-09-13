@@ -1,0 +1,7 @@
+services:
+  nauta-monitor:
+    # En el homelab Docker Hub está bloqueado (403): la imagen no se compila
+    # localmente, se baja ya construida desde GitHub Container Registry.
+    # Publícala con el workflow .github/workflows/docker-image.yml.
+    image: ghcr.io/dlampatricio/nauta_monitor:latest
+    build: !reset null
