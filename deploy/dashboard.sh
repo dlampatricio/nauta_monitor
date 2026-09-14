@@ -3,8 +3,7 @@ set -euo pipefail
 
 # Dashboard del homeserver: sesión tmux "dash" con el estado Nauta,
 # los logs del contenedor en vivo y htop. Idempotente: si la sesión
-# ya existe, solo avisa. Usado tanto desde la consola física (tty1,
-# vía autologin) como a mano con `make dash`.
+# ya existe, solo avisa. Ejecuta: ./deploy/dashboard.sh
 
 SESSION="dash"
 NAUTA_HOME="${NAUTA_HOME:-/opt/nauta-monitor}"

@@ -45,21 +45,20 @@ También se aceptan `NAUTA_USERNAME` y `NAUTA_PASS` como variables de entorno.
 ## Uso
 
 ```bash
-# Consulta única
-nauta-monitor once
-nauta-monitor once --json            # salida JSON para scripts
-
-# Bucle con panel en vivo (en el homelab)
-nauta-monitor watch
-nauta-monitor watch --interval 1800 --speedtest-interval 3600
-
-# Últimas muestras guardadas
-nauta-monitor history --limit 20
+# Panel en vivo (comando por defecto)
+nauta-monitor watch --history data\history.jsonl
 ```
 
-> `watch` detecta si la salida es una terminal: si lo es muestra el panel en
-> vivo; si no (contenedor, systemd, redirección a archivo) escribe una línea de
-> log por cada actualización, sin códigos ANSI.
+`watch` dibuja un panel que se refresca cada segundo: pulso `◉/○`, sparkline con
+la tendencia de horas de la sesión, barras de velocidad y cuenta atrás hasta la
+siguiente consulta. Es el único comando que necesitas a diario.
+
+Si la salida no es una terminal (contenedor, systemd, redirección a archivo)
+escribe una línea de log por cada actualización, sin códigos ANSI.
+
+> **Avanzado:** `once` ejecuta una sola consulta y sale, útil para scripts y el
+> healthcheck del contenedor (`once --json`, `--no-speedtest`, `--no-history`).
+> No aparece en el `--help`, pero existe.
 
 ### Alerta por saldo bajo
 
@@ -97,21 +96,27 @@ docker compose logs nauta-monitor --tail 20    # última línea de saldo
 - Zona horaria configurable con `TZ` (por defecto `America/Havana`).
 - Logs del contenedor rotan automáticamente (`json-file`, máx 10 MiB × 3).
 
-### Imagen publicada en GHCR (CI)
+### Desplegar sin Docker Hub (GHCR)
 
-El workflow `.github/workflows/docker-image.yml` compila la imagen en GitHub
-Actions y la publica en `ghcr.io/<dueño>/nauta_monitor` con los tags `latest`
-(rama por defecto), SHA del commit y `vX.Y.Z` (tags git). Esto permite
-desplegar sin acceso a Docker Hub (bloqueado en algunas redes, p. ej. Nauta):
+En redes donde Docker Hub está bloqueado (p. ej. Nauta devuelve `403 Forbidden`),
+la imagen se compila en GitHub Actions y se publica en
+`ghcr.io/<dueño>/nauta_monitor` con los tags `latest` (rama por defecto), SHA
+del commit y `vX.Y.Z` (tags git). El homelab solo la descarga:
 
 ```bash
 # En una máquina sin acceso a Docker Hub:
+docker compose -f docker-compose.yml -f deploy/docker-compose.server.yml pull
 docker compose -f docker-compose.yml -f deploy/docker-compose.server.yml up -d
-# o con el Makefile:  make pull && make deploy
 ```
 
-Para desarrollo local (con acceso normal a Docker Hub) se sigue usando
-`make up`, que compila con `build: .`.
+El push a `master` dispara el build automáticamente (pestaña *Actions* del
+repo); también puedes dispararlo a mano desde *Actions → docker-image →
+Run workflow*. Para desarrollo local (con acceso normal a Docker Hub) se sigue
+usando `docker compose up -d --build`, que compila con `build: .`.
+
+Si algún día GHCR exigiera autenticación para el `pull` (hoy no: la imagen es
+pública), haz `docker login ghcr.io -u <usuario>` con un token de GitHub con
+scope `read:packages`.
 
 ## Homeserver: dashboard en la consola (laptop Ubuntu)
 
@@ -128,7 +133,7 @@ pantalla de la laptop (tty1, autologin + tmux "dash")
 Toda la preparación del servidor (una vez):
 
 ```bash
-sudo apt update && sudo apt install -y tmux htop jq docker.io make docker-compose-plugin
+sudo apt update && sudo apt install -y tmux htop jq docker.io docker-compose-plugin
 sudo usermod -aG docker $USER   # y vuelve a entrar a la sesión
 
 git clone <repo> /opt/nauta-monitor
@@ -136,21 +141,17 @@ cd /opt/nauta-monitor
 cp .env.example .env
 cp config.example.toml config.toml && nano config.toml   # credenciales
 mkdir data
-make pull                         # baja la imagen de GHCR (Docker Hub está bloqueado)
-make deploy                       # arranca el contenedor
-make logs                         # verifica la primera línea de saldo
+docker compose -f docker-compose.yml -f deploy/docker-compose.server.yml pull
+docker compose -f docker-compose.yml -f deploy/docker-compose.server.yml up -d
+docker compose logs -f                    # verifica la primera línea de saldo
 
 chmod +x deploy/*.sh
 ./deploy/install_dashboard.sh    # autologin tty1 + pantalla que no se apaga
 sudo reboot                      # al encender aparece el dashboard
 ```
 
-> **¿Por qué `make pull` y no `make up`?** En la red Nauta Docker Hub devuelve
-> `403 Forbidden`. La imagen se construye en **GitHub Actions** y se publica en
-> **GHCR** (`ghcr.io/<dueño>/nauta_monitor`); el homelab solo la descarga. El
-> push a `master` dispara el build automáticamente (pestaña *Actions* del repo);
-> también puedes dispararlo a mano desde *Actions → docker-image →
-> Run workflow*.
+Para revisar el estado en cualquier momento: `docker compose ps` y
+`docker compose logs --tail 20`. Para ver solo el dashboard: `./deploy/dashboard.sh`.
 
 Si algún día GHCR exigiera autenticación para el `pull` (hoy no: la imagen es
 pública), haz `docker login ghcr.io -u <usuario>` con un token de GitHub con
@@ -161,7 +162,7 @@ paneles), `Ctrl-b o` (saltar panes), `tmux attach -t dash` (volver).
 
 Por SSH desde otro equipo: `ssh usuario@laptop` y luego `tmux attach -t dash`
 (cada cliente de tmux renderiza su propia copia; la pantalla de la laptop no se
-molesta). Solo para ver logs: `make logs`.
+molesta).
 
 Para agregar más programas al dashboard, edita `deploy/dashboard.sh` y añade
 otro `split-window` + `send-keys` (p. ej. `docker logs -f <otro-servicio>`).
@@ -171,6 +172,8 @@ otro `split-window` + `send-keys` (p. ej. `docker logs -f <otro-servicio>`).
 - El host del portal (`https://secure.etecsa.net:8443`) normalmente es
   inalcanzable fuera de la red Nauta: este monitor debe correr en el enrutador o
   una máquina dentro de la red.
+- El portal usa un TLS antiguo: por eso el cliente fuerza `SECLEVEL=0` y acepta
+  certificados autofirmados solo para esta conexión (nunca `verify=False` global).
 - `config.toml`, `.env`, `history.jsonl` y `data/` están en `.gitignore`: no
   los comprometas.
 - En el homelab, el monitor corre **nativo en Docker**; el dashboard de la

@@ -9,7 +9,7 @@ NAUTA_HOME="${NAUTA_HOME:-/opt/nauta-monitor}"
 HIST="$NAUTA_HOME/data/history.jsonl"
 
 if [ ! -f "$HIST" ]; then
-    echo "Sin datos todavia: revisa 'make logs'"
+    echo "Sin datos todavia: revisa 'docker compose logs -f'"
     exit 0
 fi
 

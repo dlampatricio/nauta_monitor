@@ -27,13 +27,10 @@ def render_account(account: AccountInfo, hours: float, speed: SpeedResult | None
     table = Table(title="Nauta Hogar")
     table.add_column("Métrica", style="bold")
     table.add_column("Valor")
-    table.add_row("Estado", account.account_status or "Desconocido")
     table.add_row("Crédito", f"{account.credit:.2f} CUP" if account.credit is not None else "—")
-    table.add_row("Horas restantes", f"{hours:.1f} h  ({format_hours(hours)})")
-    table.add_row("Expiración", account.expiration_date or "—")
-    table.add_row("Áreas de acceso", account.access_areas or "—")
+    table.add_row("Horas", format_hours(hours))
     if speed is not None:
-        table.add_row("Ultima prueba", _speed_line(speed))
+        table.add_row("Velocidad", _speed_line(speed))
     return table
 
 
@@ -53,28 +50,3 @@ def render_sessions(account: AccountInfo) -> Table:
         )
         table.add_row(start, end, duration)
     return table
-
-
-def print_history(entries: list[dict]) -> None:
-    table = Table(title="Historial")
-    table.add_column("Fecha")
-    table.add_column("Crédito")
-    table.add_column("Horas")
-    table.add_column("Descarga")
-    table.add_column("Subida")
-    table.add_column("Ping")
-    for entry in entries:
-        credit = entry.get("credit")
-        hours = entry.get("hours")
-        dl = entry.get("download_mbps")
-        ul = entry.get("upload_mbps")
-        ping = entry.get("ping_ms")
-        table.add_row(
-            str(entry.get("timestamp", "")),
-            f"{credit:.2f} CUP" if credit is not None else "—",
-            f"{hours:.1f}" if hours is not None else "—",
-            f"{dl:.2f}" if dl is not None else "—",
-            f"{ul:.2f}" if ul is not None else "—",
-            f"{ping:.1f}" if ping is not None else "—",
-        )
-    console.print(table)
