@@ -49,9 +49,12 @@ También se aceptan `NAUTA_USERNAME` y `NAUTA_PASS` como variables de entorno.
 nauta-monitor watch --history data\history.jsonl
 ```
 
-`watch` dibuja un panel que se refresca cada segundo: pulso `◉/○`, sparkline con
-la tendencia de horas de la sesión, barras de velocidad y cuenta atrás hasta la
-siguiente consulta. Es el único comando que necesitas a diario.
+`watch` muestra en un panel limpio el **crédito**, las **horas restantes**, el
+**consumo medio** (horas/día) con una estimación de cuántos días durará el saldo
+al ritmo actual y la **velocidad** real (↓/↑, sin ruido). Debajo, un pequeño
+gráfico de barras con el consumo de los últimos 7 días (calculado del
+historial; los huecos largos, cuando el monitor estuvo apagado, se ignoran).
+Los números son los datos; las barras solo dan la forma.
 
 Si la salida no es una terminal (contenedor, systemd, redirección a archivo)
 escribe una línea de log por cada actualización, sin códigos ANSI.

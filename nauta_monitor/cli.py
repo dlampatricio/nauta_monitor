@@ -9,12 +9,13 @@ import threading
 import time
 from contextlib import nullcontext
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime, timedelta
 
-from rich.console import Console
+from rich.console import Console, Group
 from rich.live import Live
 from rich.panel import Panel
 from rich.table import Table
+from rich.text import Text
 
 from nauta_monitor import __version__
 from nauta_monitor.calc import format_hours, hours_from_credit
@@ -29,32 +30,9 @@ _EXIT_OK = 0
 _EXIT_ERROR = 1
 _EXIT_CONFIG = 2
 
-_SPARK = "▁▂▃▄▅▆▇█"
-_SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
-
-
-def _sparkline(values: list[float], width: int = 16) -> str:
-    if not values:
-        return ""
-    values = values[-width:]
-    if len(values) == 1:
-        return _SPARK[4]
-    low, high = min(values), max(values)
-    span = high - low
-    if span <= 0:
-        return _SPARK[4] * len(values)
-    return "".join(
-        _SPARK[int(round((value - low) / span * (len(_SPARK) - 1)))] for value in values
-    )
-
-
-def _bar(value: float | None, limit: float, width: int = 12) -> str:
-    filled = 0 if not value or limit <= 0 else int(round(min(value, limit) / limit * width))
-    return "▓" * filled + "░" * (width - filled)
-
-
-def _pulse(time_now: float) -> str:
-    return "◉" if int(time_now) % 2 == 0 else "○"
+_DAY_GAP_SECONDS = 2 * 3600
+_DAYS_WINDOW = 7
+_DAY_NAMES = ["Lu", "Ma", "Mi", "Ju", "Vi", "Sa", "Do"]
 
 
 def _hours_style(hours: float | None) -> str:
@@ -67,6 +45,52 @@ def _hours_style(hours: float | None) -> str:
     return "bold red"
 
 
+def _consumption_by_day(history: list[tuple[float, float]]) -> dict[date, float]:
+    by_day: dict[date, float] = {}
+    ordered = sorted(history, key=lambda item: item[0])
+    for (start, previous), (end, current) in zip(ordered, ordered[1:]):
+        if end - start > _DAY_GAP_SECONDS:
+            continue
+        drop = max(0.0, previous - current)
+        if drop <= 0:
+            continue
+        day = datetime.fromtimestamp(end).date()
+        by_day[day] = by_day.get(day, 0.0) + drop
+    return by_day
+
+
+def _consumption_rate(by_day: dict[date, float]) -> float | None:
+    if len(by_day) < 2:
+        return None
+    return sum(by_day.values()) / _DAYS_WINDOW
+
+
+def _days_left(hours: float | None, rate: float | None) -> str:
+    if hours is None or rate is None:
+        return "Aún sin historial suficiente"
+    if rate <= 0:
+        return "Sin consumo reciente"
+    return f"{rate:.1f} h/día  →  faltan ≈ {hours / rate:.0f} días"
+
+
+def _week_chart(by_day: dict[date, float], width: int = 15) -> list[str]:
+    today = datetime.now().date()
+    days = [today - timedelta(days=i) for i in range(_DAYS_WINDOW - 1, -1, -1)]
+    peak = max(by_day.values()) if by_day else 0.0
+    lines: list[str] = []
+    for day in days:
+        label = _DAY_NAMES[day.weekday()]
+        value = by_day.get(day)
+        if value is None:
+            lines.append(f"{label} {'—':>4} {'░' * width}")
+        elif peak <= 0:
+            lines.append(f"{label} {value:4.1f} {'░' * width}")
+        else:
+            filled = round(value / peak * width)
+            lines.append(f"{label} {value:4.1f} {'█' * filled}{'░' * (width - filled)}")
+    return lines
+
+
 @dataclass
 class WatchState:
     account: AccountInfo | None = None
@@ -76,9 +100,7 @@ class WatchState:
     last_speedtest_at: float = 0.0
     status: str = "Iniciando..."
     alerted: bool = False
-    history: list[float] = field(default_factory=list)
-    dl_history: list[float] = field(default_factory=list)
-    ul_history: list[float] = field(default_factory=list)
+    history: list[tuple[float, float]] = field(default_factory=list)
     speedtest_running: bool = False
 
 
@@ -209,7 +231,7 @@ def _refresh_saldo(config: Config, state: WatchState) -> None:
         state.account = account
         state.hours = hours_from_credit(account.credit, config.cup_per_hour)
         if state.hours is not None:
-            state.history.append(state.hours)
+            state.history.append((time.time(), state.hours))
         state.status = "Saldo actualizado"
     except PortalError as exc:
         state.status = f"Error al consultar saldo: {exc}"
@@ -217,12 +239,7 @@ def _refresh_saldo(config: Config, state: WatchState) -> None:
 
 def _refresh_speedtest(config: Config, state: WatchState, on_done=None) -> None:
     try:
-        speed = _run_speedtest(config)
-        state.speed = speed
-        if speed.download_mbps is not None:
-            state.dl_history.append(speed.download_mbps)
-        if speed.upload_mbps is not None:
-            state.ul_history.append(speed.upload_mbps)
+        state.speed = _run_speedtest(config)
         state.status = "Speedtest completado"
     except SpeedtestError as exc:
         state.status = f"Speedtest falló: {exc}"
@@ -249,10 +266,6 @@ def _check_alert(config: Config, state: WatchState, out: Console = console) -> N
         state.alerted = False
 
 
-def _countdown(now: float, last: float, interval: int) -> int:
-    return max(0, int(interval - (now - last)))
-
-
 def _watch_line(state: WatchState) -> str:
     parts = [f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}]"]
     if state.account is not None:
@@ -276,51 +289,48 @@ def _watch_line(state: WatchState) -> str:
     return " ".join(parts)
 
 
-def _watch_panel(state: WatchState, config: Config, saldo_interval: int, speedtest_interval: int) -> Panel:
-    now = time.time()
-    saldo_in = _countdown(now, state.last_saldo_at, saldo_interval)
-    status = f"{state.status} · Saldo en {saldo_in // 60:02d}:{saldo_in % 60:02d}"
-    if speedtest_interval > 0:
-        speed_in = _countdown(now, state.last_speedtest_at, speedtest_interval)
-        status += f" · Velocidad en {speed_in // 60:02d}:{speed_in % 60:02d}"
-    title = f"{_pulse(now)}  Nauta Hogar"
-
+def _watch_panel(state: WatchState) -> Panel:
     grid = Table(show_header=False, box=None, expand=False)
     grid.add_column(justify="right", style="bold", no_wrap=True)
     grid.add_column(no_wrap=True)
 
     if state.account is None:
         grid.add_row("Saldo", state.status)
-        return Panel(grid, title=title, subtitle=status, expand=False)
+        return Panel(grid, title="Nauta Hogar", expand=False)
 
     account = state.account
     credit = f"{account.credit:.2f} CUP" if account.credit is not None else "—"
     grid.add_row("Crédito", credit)
 
     hours_text = format_hours(state.hours) if state.hours is not None else "—"
-    spark = _sparkline(state.history)
-    grid.add_row("Horas", hours_text + (f"  {spark}" if spark else ""), style=_hours_style(state.hours))
+    grid.add_row("Horas", hours_text, style=_hours_style(state.hours))
+
+    by_day = _consumption_by_day(state.history)
+    rate = _consumption_rate(by_day)
+    grid.add_row("Consumo", _days_left(state.hours, rate))
 
     if state.speedtest_running:
-        spin = _SPINNER[int(now * 2) % len(_SPINNER)]
-        grid.add_row("Velocidad", f"{spin} Midiendo velocidad...")
+        grid.add_row("Velocidad", "Midiendo velocidad...")
     else:
         speed = state.speed
         if speed is None:
-            grid.add_row("Velocidad", "Sin mediciones aún")
+            grid.add_row("Velocidad", "Sin medición")
         else:
-            dl_limit = max(state.dl_history) if state.dl_history else 0
-            ul_limit = max(state.ul_history) if state.ul_history else 0
             parts = []
             if speed.download_mbps is not None:
-                parts.append(f"{_bar(speed.download_mbps, dl_limit)} ↓{speed.download_mbps:.2f}")
+                parts.append(f"↓ {speed.download_mbps:.2f}")
             if speed.upload_mbps is not None:
-                parts.append(f"{_bar(speed.upload_mbps, ul_limit)} ↑{speed.upload_mbps:.2f}")
-            if speed.ping_ms is not None:
-                parts.append(f"{speed.ping_ms:.0f} ms")
-            grid.add_row("Velocidad", "  ".join(parts))
+                parts.append(f"↑ {speed.upload_mbps:.2f}")
+            grid.add_row("Velocidad", " · ".join(parts) + " Mbps" if parts else "—")
 
-    return Panel(grid, title=title, subtitle=status, expand=False)
+    renderables: list[object] = [grid]
+    if by_day:
+        renderables.append(Text("\nConsumo semanal (horas por día)", style="bold"))
+        renderables.append(Text("\n".join(_week_chart(by_day))))
+    else:
+        renderables.append(Text("\nSin historial esta semana", style="dim"))
+
+    return Panel(Group(*renderables), title="Nauta Hogar", expand=False)
 
 
 def command_watch(config: Config, args: argparse.Namespace) -> int:
@@ -335,16 +345,16 @@ def command_watch(config: Config, args: argparse.Namespace) -> int:
     on_done = (lambda state: out.print(_watch_line(state))) if not interactive else None
 
     state = WatchState()
-    for entry in load_recent(history_path, limit=96):
+    for entry in load_recent(history_path, limit=500):
         hours = entry.get("hours")
-        if hours is not None:
-            state.history.append(hours)
-        dl = entry.get("download_mbps")
-        if dl is not None:
-            state.dl_history.append(dl)
-        ul = entry.get("upload_mbps")
-        if ul is not None:
-            state.ul_history.append(ul)
+        ts = entry.get("timestamp")
+        if hours is None or not ts:
+            continue
+        try:
+            epoch = datetime.fromisoformat(ts).timestamp()
+        except ValueError:
+            continue
+        state.history.append((epoch, hours))
 
     _refresh_saldo(config, state)
     if state.account is not None:
@@ -365,7 +375,7 @@ def command_watch(config: Config, args: argparse.Namespace) -> int:
             console=console,
             refresh_per_second=1,
             screen=True,
-            get_renderable=lambda: _watch_panel(state, config, saldo_interval, speedtest_interval),
+            get_renderable=lambda: _watch_panel(state),
         )
         if interactive
         else nullcontext()
