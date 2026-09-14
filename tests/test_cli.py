@@ -1,4 +1,9 @@
-from nauta_monitor.cli import WatchState, _watch_line
+from io import StringIO
+
+from rich.console import Console
+
+from nauta_monitor.cli import WatchState, _watch_line, _watch_panel
+from nauta_monitor.config import Config
 from nauta_monitor.parser import AccountInfo
 from nauta_monitor.speedtest import SpeedResult
 
@@ -32,3 +37,14 @@ def test_watch_line_with_speed():
     assert "desc=35.50 Mbps" in line
     assert "sub=12.20 Mbps" in line
     assert "ping=40.0 ms" in line
+
+
+def test_watch_panel_renders():
+    state = WatchState(account=AccountInfo(account_status="Activa", credit=37.82), hours=3.0)
+    config = Config(username="u", password="p")
+    out = StringIO()
+    Console(file=out, force_terminal=False, width=80).print(
+        _watch_panel(state, config, 3600, 1800)
+    )
+    assert "Nauta Hogar Monitor" in out.getvalue()
+    assert "Horas restantes" in out.getvalue()

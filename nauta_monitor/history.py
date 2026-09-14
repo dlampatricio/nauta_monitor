@@ -7,7 +7,9 @@ from pathlib import Path
 
 def append_sample(path: str | Path, sample: dict) -> None:
     sample = {"timestamp": datetime.now().isoformat(timespec="seconds"), **sample}
-    with open(path, "a", encoding="utf-8") as handle:
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with open(target, "a", encoding="utf-8") as handle:
         handle.write(json.dumps(sample, ensure_ascii=False) + "\n")
 
 

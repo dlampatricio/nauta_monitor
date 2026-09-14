@@ -276,6 +276,7 @@ def command_watch(config: Config, args: argparse.Namespace) -> int:
     speedtest_interval = 0 if args.no_speedtest else config.speedtest_interval
     if args.speedtest_interval is not None:
         speedtest_interval = args.speedtest_interval
+    history_path = args.history or config.history_path
 
     interactive = sys.stdout.isatty()
     out = console if interactive else Console(color_system=None)
@@ -284,7 +285,7 @@ def command_watch(config: Config, args: argparse.Namespace) -> int:
     state = WatchState()
     _refresh_saldo(config, state)
     if state.account is not None:
-        append_sample(config.history_path, _sample_dict(config, state))
+        append_sample(history_path, _sample_dict(config, state))
         _check_alert(config, state, out=out)
     if not interactive:
         out.print(_watch_line(state))
@@ -297,10 +298,10 @@ def command_watch(config: Config, args: argparse.Namespace) -> int:
 
     live_ctx = (
         Live(
-            lambda: _watch_panel(state, config, saldo_interval, speedtest_interval),
             console=console,
             refresh_per_second=1,
             screen=True,
+            get_renderable=lambda: _watch_panel(state, config, saldo_interval, speedtest_interval),
         )
         if interactive
         else nullcontext()
@@ -314,7 +315,7 @@ def command_watch(config: Config, args: argparse.Namespace) -> int:
                     state.last_saldo_at = now
                     _refresh_saldo(config, state)
                     if state.account is not None:
-                        append_sample(config.history_path, _sample_dict(config, state))
+                        append_sample(history_path, _sample_dict(config, state))
                         _check_alert(config, state, out=out)
                     if not interactive:
                         out.print(_watch_line(state))
