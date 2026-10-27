@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nauta-monitor"
-version = "0.1.0"
-description = "Monitor de cuenta Nauta Hogar: saldo, horas restantes y velocidad real desde la terminal."
+version = "0.2.0"
+description = "Monitor sencillo para Nauta Hogar: saldo, horas restantes, consumo diario y velocidad real desde la terminal."
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }

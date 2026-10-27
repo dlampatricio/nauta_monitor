@@ -1,0 +1,64 @@
+site_name: nauta-monitor
+site_description: Monitor sencillo para cuentas Nauta Hogar
+site_author: nauta-monitor
+repo_url: https://github.com/dlampatricio/nauta_monitor
+repo_name: nauta_monitor
+
+theme:
+  name: material
+  language: es
+  palette:
+    - scheme: slate
+      primary: teal
+      accent: cyan
+      toggle:
+        icon: material/brightness-4
+        name: Cambiar a modo claro
+    - scheme: default
+      primary: teal
+      accent: cyan
+      toggle:
+        icon: material/brightness-7
+        name: Cambiar a modo oscuro
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+
+nav:
+  - Inicio: index.md
+  - Guía:
+      - Instalación: installation.md
+      - Configuración: configuration.md
+      - Uso: usage.md
+  - Despliegue:
+      - Docker: docker.md
+      - Homeserver / Consola: homeserver.md
+  - Ayuda:
+      - Solución de problemas: troubleshooting.md
+      - Preguntas frecuentes: faq.md
+  - Desarrollo:
+      - Contribuir: contributing.md
+      - Registro de cambios: changelog.md
+
+plugins:
+  - search:
+      lang: es
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.tabbed:
+      alternate_style: true
+  - attr_list
+  - toc:
+      permalink: true
+
+extra_css:
+  - stylesheets/extra.css

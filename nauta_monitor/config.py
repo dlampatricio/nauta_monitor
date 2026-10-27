@@ -99,7 +99,7 @@ def load_config(path: str | Path | None = None) -> Config:
             ping_url=speedtest.get("ping_url", "backend/empty.php"),
             get_ip_url=speedtest.get("get_ip_url", "backend/getIP.php"),
             download_chunks=int(speedtest.get("download_chunks", 200)),
-            upload_kib=int(speedtest.get("upload_kib", 1024)),
+            upload_kib=int(speedtest.get("upload_kib", 256)),
             concurrent=int(speedtest.get("concurrent", 3)),
             max_duration=float(speedtest.get("max_duration", 20.0)),
         ),

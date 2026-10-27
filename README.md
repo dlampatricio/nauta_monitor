@@ -1,8 +1,8 @@
 # nauta-monitor
 
-Monitor de línea de comandos para la cuenta **Nauta Hogar**. Consulta el saldo
-en CUP, calcula las horas de servicio restantes según tu tarifa y mide la
-velocidad real del enlace contra el servidor LibreSpeed de ETECSA.
+Monitor sencillo y claro para tu cuenta **Nauta Hogar**. Consulta el saldo en CUP, calcula las horas de servicio restantes según tu tarifa, estima cuándo se te acabará el saldo y mide la velocidad real contra el servidor LibreSpeed de ETECSA.
+
+**Ideal para:** ver rápido cuánto te queda, vigilar tu consumo diario/semanal y tenerlo corriendo en segundo plano con Docker.
 
 ## Cómo funciona
 
@@ -17,14 +17,23 @@ Replica el flujo del portal de acceso ETECSA:
 4. La velocidad se mide con el protocolo LibreSpeed contra el servidor de
    ETECSA (`http://speedtest.cd.etecsa.cu/`, configurable).
 
-## Instalación
+## Instalación rápida (3 pasos)
 
 ```bash
-git clone ... && cd nauta_monitor
+# 1) Clonar
+git clone <repo> && cd nauta_monitor
+
+# 2) Crear entorno e instalar
 python -m venv .venv
 .venv\Scripts\activate          # Windows
-# source .venv/bin/activate     # Linux/macOS (homelab)
-pip install -e ".[dev]"
+# source .venv/bin/activate     # Linux/macOS
+pip install -e .
+
+# 3) Configurar e iniciar
+nauta-monitor init             # Asistente interactivo (recomendado)
+# o: cp config.example.toml config.toml && nano config.toml
+nauta-monitor doctor           # Comprobar conexión y credenciales
+nauta-monitor                  # Ver panel en vivo
 ```
 
 ## Configuración
@@ -46,22 +55,26 @@ También se aceptan `NAUTA_USERNAME` y `NAUTA_PASS` como variables de entorno.
 
 ```bash
 # Panel en vivo (comando por defecto)
-nauta-monitor watch --history data\history.jsonl
+nauta-monitor
+
+# Consulta rápida
+nauta-monitor status        # o: nauta-monitor once
+nauta-monitor status --json # Para scripts/automatismos
+
+# Diagnóstico
+nauta-monitor doctor
+
+# Configuración interactiva
+nauta-monitor init
 ```
 
-`watch` muestra en un panel limpio el **crédito**, las **horas restantes**, el
-**consumo medio** (horas/día) con una estimación de cuántos días durará el saldo
-al ritmo actual y la **velocidad** real (↓/↑, sin ruido). Debajo, un pequeño
-gráfico de barras con el consumo de los últimos 7 días (calculado del
-historial; los huecos largos, cuando el monitor estuvo apagado, se ignoran).
-Los números son los datos; las barras solo dan la forma.
+`watch` (por defecto) muestra un panel limpio con el **crédito**, las **horas restantes**,
+el **consumo medio** (horas/día), **fin estimado** del saldo al ritmo actual y la
+**velocidad** real (↓/↑). Debajo aparece un gráfico de barras con el consumo de los
+últimos 7 días (calculado del historial; los huecos largos se ignoran).
 
 Si la salida no es una terminal (contenedor, systemd, redirección a archivo)
 escribe una línea de log por cada actualización, sin códigos ANSI.
-
-> **Avanzado:** `once` ejecuta una sola consulta y sale, útil para scripts y el
-> healthcheck del contenedor (`once --json`, `--no-speedtest`, `--no-history`).
-> No aparece en el `--help`, pero existe.
 
 ### Alerta por saldo bajo
 
@@ -181,6 +194,11 @@ otro `split-window` + `send-keys` (p. ej. `docker logs -f <otro-servicio>`).
   los comprometas.
 - En el homelab, el monitor corre **nativo en Docker**; el dashboard de la
   consola es solo un visor (no consulta al portal: lee el historial y los logs).
+
+## Documentación
+
+- **Online**: [Documentación completa](docs/) (se puede publicar con GitHub Pages)
+- **Local**: `pip install mkdocs mkdocs-material && mkdocs serve`
 
 ## Desarrollo
 

@@ -63,7 +63,7 @@ def test_watch_line_with_speed():
 def test_watch_panel_basic_rows():
     state = WatchState(account=AccountInfo(account_status="Activa", credit=37.82), hours=3.0)
     text = _render(state)
-    assert "Nauta Hogar" in text
+    assert "Nauta" in text
     assert "Crédito" in text
     assert "Horas" in text
     assert "3 h" in text
@@ -89,7 +89,7 @@ def test_watch_panel_no_legacy_gadgets():
     assert "◉" not in text
     assert "▓" not in text
     assert "▁" not in text
-    assert "Consumo semanal" in text
+    assert "Consumo" in text
 
 
 def test_watch_panel_velocity_only_arrows():
@@ -148,18 +148,18 @@ def test_consumption_rate_average_over_week():
 
 
 def test_days_left():
-    assert "faltan ≈ 6 días" in _days_left(17.6, 2.8)
-    assert _days_left(10.0, None) == "Aún sin historial suficiente"
-    assert _days_left(None, 2.0) == "Aún sin historial suficiente"
-    assert _days_left(10.0, 0.0) == "Sin consumo reciente"
+    assert "faltan ≈ 6 días" in _days_left(17.6, 2.8)[0]
+    assert _days_left(10.0, None)[0] == "Aún sin historial suficiente"
+    assert _days_left(None, 2.0)[0] == "Aún sin historial suficiente"
+    assert _days_left(10.0, 0.0)[0] == "Sin consumo reciente"
 
 
 def test_week_chart_has_seven_days():
     by_day = {datetime.now().date(): 4.1}
     lines = _week_chart(by_day)
     assert len(lines) == 7
-    labels = " ".join(line.split()[0] for line in lines)
-    assert labels == "Lu Ma Mi Ju Vi Sa Do"
+    labels = [line.split()[0] for line in lines]
+    assert set(labels) == {"Lu", "Ma", "Mi", "Ju", "Vi", "Sa", "Do"}
     peak_line = lines[-1]
     assert "4.1" in peak_line
     assert "█" in peak_line

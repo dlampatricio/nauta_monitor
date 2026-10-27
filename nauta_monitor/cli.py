@@ -65,12 +65,17 @@ def _consumption_rate(by_day: dict[date, float]) -> float | None:
     return sum(by_day.values()) / _DAYS_WINDOW
 
 
-def _days_left(hours: float | None, rate: float | None) -> str:
+def _days_left(hours: float | None, rate: float | None) -> tuple[str, str | None]:
     if hours is None or rate is None:
-        return "Aún sin historial suficiente"
+        return "Aún sin historial suficiente", None
     if rate <= 0:
-        return "Sin consumo reciente"
-    return f"{rate:.1f} h/día  →  faltan ≈ {hours / rate:.0f} días"
+        return "Sin consumo reciente", None
+    days_left_val = hours / rate if rate > 0 else float("inf")
+    try:
+        end_date = (datetime.now() + timedelta(days=days_left_val)).strftime("%d/%m/%Y")
+        return f"{rate:.1f} h/día  →  faltan ≈ {days_left_val:.0f} días (fin ~{end_date})", end_date
+    except Exception:
+        return f"{rate:.1f} h/día  →  faltan ≈ {days_left_val:.0f} días", None
 
 
 def _week_chart(by_day: dict[date, float], width: int = 15) -> list[str]:
@@ -108,6 +113,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="nauta-monitor",
         description="Monitor de cuenta Nauta Hogar: saldo, horas restantes y velocidad real.",
+        epilog=(
+            "Ejemplos:\n"
+            "  nauta-monitor                # Panel en vivo\n"
+            "  nauta-monitor status         # Consulta única\n"
+            "  nauta-monitor init           # Configuración interactiva\n"
+            "  nauta-monitor doctor         # Diagnóstico del sistema\n"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("--version", action="version", version=f"nauta-monitor {__version__}")
     parser.add_argument(
@@ -117,12 +130,17 @@ def build_parser() -> argparse.ArgumentParser:
         "--verbose", action="store_true", help="Muestra el HTML crudo de la consulta para depurar."
     )
 
-    subparsers = parser.add_subparsers(dest="command", metavar="[watch]")
+    subparsers = parser.add_subparsers(dest="command", metavar="[comando]")
 
-    once = subparsers.add_parser("once")
-    once.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
-    once.add_argument("--no-speedtest", action="store_true", help=argparse.SUPPRESS)
-    once.add_argument("--no-history", action="store_true", help=argparse.SUPPRESS)
+    once = subparsers.add_parser("once", help="Consulta única y salir (ideal para scripts).")
+    once.add_argument("--json", action="store_true", help="Salida en formato JSON.")
+    once.add_argument("--no-speedtest", action="store_true", help="Omite la prueba de velocidad.")
+    once.add_argument("--no-history", action="store_true", help="No guarda en el historial.")
+
+    status = subparsers.add_parser("status", help="Alias de 'once' para consulta rápida.")
+    status.add_argument("--json", action="store_true", help="Salida en formato JSON.")
+    status.add_argument("--no-speedtest", action="store_true", help="Omite la prueba de velocidad.")
+    status.add_argument("--no-history", action="store_true", help="No guarda en el historial.")
 
     watch = subparsers.add_parser("watch", help="Bucle continuo con panel en vivo (comando por defecto).")
     watch.add_argument("--interval", type=int, default=None, help="Segundos entre consultas de saldo.")
@@ -131,6 +149,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     watch.add_argument("--no-speedtest", action="store_true", help="Desactiva las pruebas de velocidad.")
     watch.add_argument("--history", default=None, help="Ruta del archivo de historial.")
+
+    init = subparsers.add_parser("init", help="Asistente interactivo para crear config.toml.")
+    init.add_argument("--force", action="store_true", help="Sobrescribir config.toml existente.")
+
+    doctor = subparsers.add_parser("doctor", help="Diagnóstico de configuración, red y conectividad.")
 
     return parser
 
@@ -196,20 +219,23 @@ def command_once(config: Config, args: argparse.Namespace) -> int:
         raw = client.query_account_raw(config.username, config.password, portal)
     except PortalError as exc:
         console.print(f"[red]{exc}[/red]")
+        console.print("[yellow]Sugerencia:[/yellow] Asegúrate de estar conectado a la red Nauta (WiFi/cable de ETECSA).")
+        console.print("[yellow]          [/yellow] Usa [bold]nauta-monitor doctor[/bold] para diagnóstico detallado.")
         return _EXIT_ERROR
-    if args.verbose:
+    if getattr(args, "verbose", False):
         console.print(f"[dim]--- HTML ---\n{raw}\n--- (fin) ---[/dim]")
 
     account = parse_account_info(raw)
     hours = hours_from_credit(account.credit, config.cup_per_hour)
     speed = None
-    if not args.no_speedtest and config.speedtest_interval > 0:
+    if not getattr(args, "no_speedtest", False) and config.speedtest_interval > 0:
         try:
             speed = _run_speedtest(config)
         except SpeedtestError as exc:
             console.print(f"[yellow]Speedtest: {exc}[/yellow]")
+            console.print("[dim]El speedtest usa el servidor LibreSpeed de ETECSA. Puede fallar si no es accesible.[/dim]")
 
-    if args.json:
+    if getattr(args, "json", False):
         console.print_json(json.dumps(_account_to_dict(account, hours, speed)))
     else:
         console.print(render_account(account, hours, speed))
@@ -217,9 +243,12 @@ def command_once(config: Config, args: argparse.Namespace) -> int:
             console.print()
             console.print(render_sessions(account))
 
-    if not args.no_history:
+    if not getattr(args, "no_history", False):
         state = WatchState(account=account, hours=hours, speed=speed)
-        append_sample(config.history_path, _sample_dict(config, state))
+        try:
+            append_sample(config.history_path, _sample_dict(config, state))
+        except Exception:
+            pass
     return _EXIT_OK
 
 
@@ -307,7 +336,10 @@ def _watch_panel(state: WatchState) -> Panel:
 
     by_day = _consumption_by_day(state.history)
     rate = _consumption_rate(by_day)
-    grid.add_row("Consumo", _days_left(state.hours, rate))
+    consumo_text, end_date = _days_left(state.hours, rate)
+    grid.add_row("Consumo", consumo_text)
+    if end_date and state.hours and state.hours > 0:
+        grid.add_row("Fin estimado", end_date)
 
     if state.speedtest_running:
         grid.add_row("Velocidad", "Midiendo velocidad...")
@@ -325,12 +357,14 @@ def _watch_panel(state: WatchState) -> Panel:
 
     renderables: list[object] = [grid]
     if by_day:
-        renderables.append(Text("\nConsumo semanal (horas por día)", style="bold"))
+        renderables.append(Text("\nConsumo semanal (últimos 7 días)", style="bold"))
         renderables.append(Text("\n".join(_week_chart(by_day))))
     else:
-        renderables.append(Text("\nSin historial esta semana", style="dim"))
+        renderables.append(Text("\nSin historial suficiente para el gráfico", style="dim"))
 
-    return Panel(Group(*renderables), title="Nauta Hogar", expand=False)
+    status_line = f"[dim]Actualizado: {datetime.now().strftime('%H:%M:%S')} | {state.status}[/dim]"
+    renderables.append(Text(f"\n{status_line}"))
+    return Panel(Group(*renderables), title="Nauta Monitor", expand=False)
 
 
 def command_watch(config: Config, args: argparse.Namespace) -> int:
@@ -408,13 +442,193 @@ def command_watch(config: Config, args: argparse.Namespace) -> int:
     return _EXIT_OK
 
 
+def command_init(args: argparse.Namespace) -> int:
+    import os
+    from pathlib import Path
+
+    config_path = Path(args.config) if args.config else Path("config.toml")
+    if config_path.exists() and not getattr(args, "force", False):
+        console.print(f"[yellow]Ya existe {config_path}. Usa --force para sobrescribir.[/yellow]")
+        return _EXIT_CONFIG
+
+    console.print("[bold]Asistente de configuración de nauta-monitor[/bold]\n")
+    try:
+        username = input("Usuario Nauta (ej. usuario@nauta.com.cu): ").strip()
+    except EOFError:
+        username = ""
+    try:
+        import getpass
+
+        password = getpass.getpass("Contraseña (se guarda en config.toml): ").strip()
+    except Exception:
+        try:
+            password = input("Contraseña: ").strip()
+        except EOFError:
+            password = ""
+
+    if not username:
+        console.print("[red]El usuario es obligatorio.[/red]")
+        return _EXIT_CONFIG
+
+    cup_per_hour = 12.5
+    try:
+        resp = input("CUP por hora [12.5]: ").strip()
+        if resp:
+            cup_per_hour = float(resp.replace(",", "."))
+    except Exception:
+        pass
+
+    saldo_interval = 3600
+    try:
+        resp = input("Intervalo consulta saldo en segundos [3600]: ").strip()
+        if resp:
+            saldo_interval = int(resp)
+    except Exception:
+        pass
+
+    speedtest_interval = 1800
+    try:
+        resp = input("Intervalo speedtest en segundos [1800, 0 para desactivar]: ").strip()
+        if resp:
+            speedtest_interval = int(resp)
+    except Exception:
+        pass
+
+    content = f"""# Configuración generada por nauta-monitor init
+# Puedes usar variables de entorno NAUTA_USERNAME / NAUTA_PASS como alternativa
+
+[nauta]
+username = "{username}"
+password = "{password}"
+cup_per_hour = {cup_per_hour}
+saldo_interval = {saldo_interval}
+speedtest_interval = {speedtest_interval}
+history_path = "history.jsonl"
+
+[speedtest]
+base_url = "http://speedtest.cd.etecsa.cu/"
+dl_url = "backend/garbage.php"
+ul_url = "backend/empty.php"
+ping_url = "backend/empty.php"
+get_ip_url = "backend/getIP.php"
+download_chunks = 200
+upload_kib = 256
+concurrent = 3
+max_duration = 20
+
+[alerts]
+min_balance_hours = 24
+# on_alert = "notify-send 'Nauta' 'Quedan menos de 24 horas'"
+"""
+    try:
+        config_path.write_text(content, encoding="utf-8")
+        try:
+            os.chmod(config_path, 0o600)
+        except Exception:
+            pass
+        console.print(f"\n[green]Configuración guardada en {config_path}[/green]")
+        console.print("[dim]Recomendado: chmod 600 config.toml si es multiusuario[/dim]")
+        console.print("\nPrueba ahora: [bold]nauta-monitor status[/bold]")
+        return _EXIT_OK
+    except Exception as exc:
+        console.print(f"[red]No se pudo guardar {config_path}: {exc}[/red]")
+        return _EXIT_ERROR
+
+
+def command_doctor(args: argparse.Namespace) -> int:
+    from pathlib import Path
+    import os
+
+    console.print("[bold]Diagnóstico de nauta-monitor[/bold]\n")
+
+    # Config
+    config_path = Path(args.config) if args.config else Path("config.toml")
+    console.print(f"[bold]1) Configuración[/bold]")
+    console.print(f"   Archivo: {config_path} ({'existe' if config_path.exists() else 'NO EXISTE'})")
+    try:
+        config = load_config(args.config)
+        console.print(f"   Usuario: {'configurado' if config.username else '[red]FALTA[/red]'}")
+        console.print(f"   Contraseña: {'configurada' if config.password else '[red]FALTA[/red]'}")
+        console.print(f"   cup_per_hour: {config.cup_per_hour}")
+        console.print(f"   saldo_interval: {config.saldo_interval}s, speedtest_interval: {config.speedtest_interval}s")
+        console.print(f"   Historial: {config.history_path}")
+    except ConfigError as exc:
+        console.print(f"   [red]Error: {exc}[/red]")
+        console.print("   [yellow]Sugerencia:[/yellow] Ejecuta [bold]nauta-monitor init[/bold] para crear la configuración.")
+        return _EXIT_CONFIG
+
+    if not config.username or not config.password:
+        console.print("   [red]Faltan credenciales[/red]")
+        console.print("   [yellow]Sugerencia:[/yellow] Añádelas a config.toml o usa NAUTA_USERNAME/NAUTA_PASS")
+        return _EXIT_CONFIG
+
+    # Network / Portal
+    console.print(f"\n[bold]2) Portal ETECSA[/bold]")
+    console.print(f"   Intentando conectar a https://secure.etecsa.net:8443 ...")
+    try:
+        client = SecurePortalClient()
+        portal = client.init_session()
+        console.print("   [green]OK[/green] - Conexión al portal y formulario obtenidos")
+        try:
+            raw = client.query_account_raw(config.username, config.password, portal)
+            account = parse_account_info(raw)
+            hours = hours_from_credit(account.credit, config.cup_per_hour)
+            console.print(f"   [green]OK[/green] - Consulta de cuenta exitosa")
+            console.print(f"   Estado: {account.account_status or 'N/A'} | Crédito: {account.credit} CUP | Horas: {hours:.2f}")
+        except PortalError as exc:
+            console.print(f"   [red]FALLO[/red] al consultar cuenta: {exc}")
+            console.print("   [yellow]Sugerencia:[/yellow] Revisa usuario/contraseña. Debes estar en red Nauta.")
+            return _EXIT_ERROR
+    except PortalError as exc:
+        console.print(f"   [red]FALLO[/red]: {exc}")
+        console.print("   [yellow]Sugerencia:[/yellow] Debes estar conectado a la red Nauta de ETECSA (no funciona desde internet pública).")
+        console.print("                    Usa --verbose para más detalles.")
+        return _EXIT_ERROR
+
+    # Speedtest
+    console.print(f"\n[bold]3) Speedtest[/bold]")
+    if config.speedtest_interval == 0:
+        console.print("   Desactivado (speedtest_interval=0)")
+    else:
+        console.print("   Probando servidor LibreSpeed...")
+        try:
+            speed = _run_speedtest(config)
+            console.print(f"   [green]OK[/green] - ↓ {speed.download_mbps:.2f} Mbps | ↑ {speed.upload_mbps:.2f} Mbps | Ping {speed.ping_ms:.1f} ms")
+        except Exception as exc:
+            console.print(f"   [yellow]ADVERTENCIA[/yellow]: {exc}")
+            console.print("   [dim]No es crítico. El monitor seguirá funcionando sin speedtest.[/dim]")
+
+    # History
+    console.print(f"\n[bold]4) Historial[/bold]")
+    hist_path = Path(config.history_path)
+    console.print(f"   Ruta: {hist_path} ({'existe' if hist_path.exists() else 'NO EXISTE'})")
+    if hist_path.exists():
+        try:
+            recent = load_recent(hist_path, limit=10)
+            console.print(f"   Muestras recientes: {len(recent)}")
+        except Exception as exc:
+            console.print(f"   [yellow]Error leyendo: {exc}[/yellow]")
+
+    console.print(f"\n[green]Diagnóstico completado.[/green]")
+    console.print("Todo listo para usar: [bold]nauta-monitor[/bold] o [bold]nauta-monitor status[/bold]")
+    return _EXIT_OK
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+
+    if args.command == "init":
+        return command_init(args)
+    if args.command == "doctor":
+        return command_doctor(args)
+
     try:
         config = load_config(args.config)
     except ConfigError as exc:
         console.print(f"[red]{exc}[/red]")
+        console.print("[yellow]Sugerencia:[/yellow] Ejecuta [bold]nauta-monitor init[/bold] para crear tu configuración.")
+        console.print("[yellow]          [/yellow] O copia [bold]config.example.toml[/bold] a [bold]config.toml[/bold].")
         return _EXIT_CONFIG
 
     if not config.username or not config.password:
@@ -422,15 +636,17 @@ def main(argv: list[str] | None = None) -> int:
             "[red]Faltan credenciales. Defínelas en el archivo de configuración "
             "o con las variables de entorno NAUTA_USERNAME / NAUTA_PASS.[/red]"
         )
+        console.print("[yellow]Sugerencia:[/yellow] Ejecuta [bold]nauta-monitor init[/bold] o [bold]nauta-monitor doctor[/bold].")
         return _EXIT_CONFIG
 
     if args.command is None:
         args.command = "watch"
-    if args.command == "once":
+    if args.command in ("once", "status"):
         return command_once(config, args)
     if args.command == "watch":
         return command_watch(config, args)
     console.print("[red]Comando desconocido.[/red]")
+    console.print("[dim]Usa [bold]nauta-monitor --help[/bold] para ver los comandos disponibles.[/dim]")
     return _EXIT_ERROR
 
 
