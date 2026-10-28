@@ -197,7 +197,7 @@ otro `split-window` + `send-keys` (p. ej. `docker logs -f <otro-servicio>`).
 
 ## Documentación
 
-- **Online**: [Documentación completa](docs/) (se puede publicar con GitHub Pages)
+- **Online**: [Documentación completa](https://dlampatricio.github.io/nauta_monitor/)
 - **Local**: `pip install mkdocs mkdocs-material && mkdocs serve`
 
 ## Desarrollo
