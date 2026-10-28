@@ -16,7 +16,7 @@ services:
       - ./data:/app/data
     command: ["nauta-monitor", "watch", "--history", "/app/data/history.jsonl"]
     healthcheck:
-      test: ["CMD", "nauta-monitor", "once", "--no-speedtest", "--no-history", "--json"]
+      test: ["CMD", "nauta-monitor", "status", "--no-speedtest", "--no-history", "--json"]
       interval: 5m
       timeout: 30s
       retries: 3

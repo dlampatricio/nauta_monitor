@@ -17,15 +17,11 @@ class ConfigError(Exception):
 
 @dataclass
 class SpeedConfig:
-    base_url: str = "http://speedtest.cd.etecsa.cu/"
-    dl_url: str = "backend/garbage.php"
-    ul_url: str = "backend/empty.php"
-    ping_url: str = "backend/empty.php"
-    get_ip_url: str = "backend/getIP.php"
-    download_chunks: int = 200
-    upload_kib: int = 256
-    concurrent: int = 3
-    max_duration: float = 20.0
+    api_url: str = "https://api.fast.com"
+    token: str = ""
+    connections: int = 3
+    max_duration: float = 10.0
+    max_mb: float = 50.0
 
 
 @dataclass
@@ -61,15 +57,11 @@ def load_config(path: str | Path | None = None) -> Config:
     defaults: dict[str, Any] = {
         "nauta": {"cup_per_hour": 12.5, "saldo_interval": 3600, "speedtest_interval": 1800},
         "speedtest": {
-            "base_url": "http://speedtest.cd.etecsa.cu/",
-            "dl_url": "backend/garbage.php",
-            "ul_url": "backend/empty.php",
-            "ping_url": "backend/empty.php",
-            "get_ip_url": "backend/getIP.php",
-            "download_chunks": 200,
-            "upload_kib": 256,
-            "concurrent": 3,
-            "max_duration": 20.0,
+            "api_url": "https://api.fast.com",
+            "token": "",
+            "connections": 3,
+            "max_duration": 10.0,
+            "max_mb": 50.0,
         },
         "alerts": {"min_balance_hours": 24.0, "on_alert": None},
     }
@@ -93,15 +85,11 @@ def load_config(path: str | Path | None = None) -> Config:
         speedtest_interval=int(nauta.get("speedtest_interval", 1800)),
         history_path=str(nauta.get("history_path", "history.jsonl")),
         speedtest=SpeedConfig(
-            base_url=speedtest.get("base_url", "http://speedtest.cd.etecsa.cu/"),
-            dl_url=speedtest.get("dl_url", "backend/garbage.php"),
-            ul_url=speedtest.get("ul_url", "backend/empty.php"),
-            ping_url=speedtest.get("ping_url", "backend/empty.php"),
-            get_ip_url=speedtest.get("get_ip_url", "backend/getIP.php"),
-            download_chunks=int(speedtest.get("download_chunks", 200)),
-            upload_kib=int(speedtest.get("upload_kib", 256)),
-            concurrent=int(speedtest.get("concurrent", 3)),
-            max_duration=float(speedtest.get("max_duration", 20.0)),
+            api_url=str(speedtest.get("api_url", "https://api.fast.com")),
+            token=str(speedtest.get("token") or ""),
+            connections=int(speedtest.get("connections", 3)),
+            max_duration=float(speedtest.get("max_duration", 10.0)),
+            max_mb=float(speedtest.get("max_mb", 50.0)),
         ),
         alerts=AlertsConfig(
             min_balance_hours=float(alerts.get("min_balance_hours", 24.0)),

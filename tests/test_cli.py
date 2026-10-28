@@ -3,6 +3,7 @@ from io import StringIO
 
 import pytest
 from rich.console import Console
+from rich.text import Text
 
 from nauta_monitor.cli import (
     WatchState,
@@ -11,6 +12,7 @@ from nauta_monitor.cli import (
     _days_left,
     _watch_line,
     _watch_panel,
+    _watch_settings,
     _week_chart,
     build_parser,
 )
@@ -148,19 +150,54 @@ def test_consumption_rate_average_over_week():
 
 
 def test_days_left():
-    assert "faltan ≈ 6 días" in _days_left(17.6, 2.8)[0]
+    assert "≈ 6 días" in _days_left(17.6, 2.8)[0]
+    assert "≈ 1 día" in _days_left(1.5, 2.0)[0]
+    assert "fin ~" not in _days_left(17.6, 2.8)[0]
     assert _days_left(10.0, None)[0] == "Aún sin historial suficiente"
     assert _days_left(None, 2.0)[0] == "Aún sin historial suficiente"
     assert _days_left(10.0, 0.0)[0] == "Sin consumo reciente"
+
+
+def test_watch_panel_has_no_status_footer():
+    state = WatchState(account=AccountInfo(credit=37.82), hours=3.0)
+    text = _render(state)
+    assert "Actualizado:" not in text
+    assert "Saldo actualizado" not in text
+
+
+def test_watch_panel_end_date_not_duplicated():
+    state = WatchState(account=AccountInfo(credit=960.4), hours=100.0)
+    state.history = [
+        (_epoch(2026, 9, 7, 8), 30.0),
+        (_epoch(2026, 9, 7, 9), 29.0),
+        (_epoch(2026, 9, 8, 8), 20.0),
+        (_epoch(2026, 9, 8, 9), 19.0),
+    ]
+    rate = _consumption_rate(_consumption_by_day(state.history))
+    _, end_date = _days_left(state.hours, rate)
+    assert end_date is not None
+    assert _render(state).count(end_date) == 1
+
+
+def test_watch_panel_shows_speed_error():
+    state = WatchState(
+        account=AccountInfo(credit=37.82),
+        hours=3.0,
+        speed_error="No se pudo contactar con fast.com (https://api.fast.com): timeout",
+    )
+    text = _render(state)
+    assert "⚠" in text
+    assert "Sin conexión a fast.com" in text
 
 
 def test_week_chart_has_seven_days():
     by_day = {datetime.now().date(): 4.1}
     lines = _week_chart(by_day)
     assert len(lines) == 7
-    labels = [line.split()[0] for line in lines]
+    plain = [Text.from_markup(line).plain for line in lines]
+    labels = [line.split()[0] for line in plain]
     assert set(labels) == {"Lu", "Ma", "Mi", "Ju", "Vi", "Sa", "Do"}
-    peak_line = lines[-1]
+    peak_line = plain[-1]
     assert "4.1" in peak_line
     assert "█" in peak_line
 
@@ -169,16 +206,45 @@ def test_parser_defaults_to_watch():
     parser = build_parser()
     args = parser.parse_args([])
     assert args.command is None
+    # Sin subcomando se ejecuta `watch`: su namespace debe estar completo.
+    assert args.interval is None
+    assert args.speedtest_interval is None
+    assert args.no_speedtest is False
+    assert args.history is None
 
 
-def test_parser_once_hidden_but_available():
+def test_parser_status_options():
     parser = build_parser()
-    args = parser.parse_args(["once", "--json"])
-    assert args.command == "once"
+    args = parser.parse_args(["status", "--json"])
+    assert args.command == "status"
     assert args.json is True
 
 
-def test_parser_history_removed():
+def test_parser_removed_commands():
     parser = build_parser()
-    with pytest.raises(SystemExit):
-        parser.parse_args(["history"])
+    for command in ("once", "history"):
+        with pytest.raises(SystemExit):
+            parser.parse_args([command])
+
+
+def test_watch_settings_use_config_by_default():
+    config = Config(
+        username="u",
+        password="p",
+        saldo_interval=3600,
+        speedtest_interval=1800,
+        history_path="history.jsonl",
+    )
+    args = build_parser().parse_args([])
+    assert _watch_settings(config, args) == (3600, 1800, "history.jsonl")
+
+
+def test_watch_settings_flags_override_config():
+    config = Config(username="u", password="p")
+    args = build_parser().parse_args(
+        ["watch", "--interval", "60", "--speedtest-interval", "120", "--history", "h.jsonl"]
+    )
+    assert _watch_settings(config, args) == (60, 120, "h.jsonl")
+
+    args = build_parser().parse_args(["watch", "--no-speedtest"])
+    assert _watch_settings(config, args) == (config.saldo_interval, 0, config.history_path)

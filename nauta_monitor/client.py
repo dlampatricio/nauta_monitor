@@ -15,7 +15,6 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 from nauta_monitor.parser import AccountInfo, find_error, parse_account_info
 
 BASE_URL = "https://secure.etecsa.net:8443"
-QUERY_SERVLET = f"{BASE_URL}/EtecsaQueryServlet"
 
 _HEADERS = {
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",

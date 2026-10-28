@@ -11,24 +11,22 @@ cup_per_hour = 12.5
 # Segundos entre consultas de saldo al portal seguro.
 saldo_interval = 3600
 
-# Segundos entre pruebas de velocidad real. Pon 0 para desactivarlas.
+# Segundos entre pruebas de velocidad (0 = desactivarlas). Cada prueba usa
+# ~10 s de bajada + 10 s de subida, así que consume saldo/tiempo real.
 speedtest_interval = 1800
 
 [speedtest]
-# Servidor LibreSpeed de ETECSA (configurable si no es alcanzable desde tu red).
-base_url = "http://speedtest.cd.etecsa.cu/"
-dl_url = "backend/garbage.php"
-ul_url = "backend/empty.php"
-ping_url = "backend/empty.php"
-get_ip_url = "backend/getIP.php"
-# Chunks de 1 MiB descargados en cada prueba (max 1024).
-download_chunks = 200
-# Peso del payload de subida en KiB.
-upload_kib = 256
-# Peticiones simultáneas para saturar el enlace.
-concurrent = 3
-# Duración máxima de descarga/subida por prueba en segundos.
-max_duration = 20
+# fast.com (Netflix): mide la velocidad real de tu internet internacional.
+# No usa el servidor interno de ETECSA, así que necesita sesión Nauta activa.
+api_url = "https://api.fast.com"
+# Token público de fast.com. Déjalo vacío salvo que Netflix lo cambie.
+# token = ""
+# Conexiones paralelas para la descarga.
+connections = 3
+# Segundos máximos por dirección (descarga y subida).
+max_duration = 10
+# Tope de datos por dirección, en MB.
+max_mb = 50
 
 [alerts]
 # Alertar cuando queden menos de estas horas de servicio.

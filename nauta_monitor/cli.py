@@ -5,12 +5,14 @@ import json
 import shlex
 import subprocess
 import sys
+import textwrap
 import threading
 import time
 from contextlib import nullcontext
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 
+from rich import box
 from rich.console import Console, Group
 from rich.live import Live
 from rich.panel import Panel
@@ -24,7 +26,7 @@ from nauta_monitor.config import Config, ConfigError, load_config
 from nauta_monitor.display import console, render_account, render_sessions
 from nauta_monitor.history import append_sample, load_recent
 from nauta_monitor.parser import AccountInfo, parse_account_info
-from nauta_monitor.speedtest import LibreSpeedClient, SpeedResult, SpeedtestError
+from nauta_monitor.speedtest import FastClient, SpeedResult, SpeedtestError
 
 _EXIT_OK = 0
 _EXIT_ERROR = 1
@@ -34,15 +36,36 @@ _DAY_GAP_SECONDS = 2 * 3600
 _DAYS_WINDOW = 7
 _DAY_NAMES = ["Lu", "Ma", "Mi", "Ju", "Vi", "Sa", "Do"]
 
+# Colores estándar del terminal: texto normal (blanco) y acentos puntuales.
+_ACCENT = "cyan"
+_MUTED = "dim"
+_WARN = "yellow"
+_DANGER = "red"
+
+_PIXEL_SPINNER = ("▘", "▝", "▗", "▖")
+_SPEED_ERROR_HINTS = (
+    ("No se pudo contactar con fast.com", "Sin conexión a fast.com"),
+    ("no devolvió servidores", "fast.com no respondió"),
+    ("No se pudo medir la velocidad de descarga", "No se pudo medir la descarga"),
+    ("No se pudo medir la velocidad de subida", "No se pudo medir la subida"),
+)
+
+
+def _short_speed_error(message: str) -> str:
+    for needle, short in _SPEED_ERROR_HINTS:
+        if needle in message:
+            return short
+    return textwrap.shorten(message, width=48, placeholder="…")
+
 
 def _hours_style(hours: float | None) -> str:
     if hours is None:
-        return "dim"
+        return _MUTED
     if hours >= 24:
         return "bold green"
     if hours >= 12:
-        return "bold yellow"
-    return "bold red"
+        return f"bold {_WARN}"
+    return f"bold {_DANGER}"
 
 
 def _consumption_by_day(history: list[tuple[float, float]]) -> dict[date, float]:
@@ -70,12 +93,11 @@ def _days_left(hours: float | None, rate: float | None) -> tuple[str, str | None
         return "Aún sin historial suficiente", None
     if rate <= 0:
         return "Sin consumo reciente", None
-    days_left_val = hours / rate if rate > 0 else float("inf")
-    try:
-        end_date = (datetime.now() + timedelta(days=days_left_val)).strftime("%d/%m/%Y")
-        return f"{rate:.1f} h/día  →  faltan ≈ {days_left_val:.0f} días (fin ~{end_date})", end_date
-    except Exception:
-        return f"{rate:.1f} h/día  →  faltan ≈ {days_left_val:.0f} días", None
+    days_left_val = hours / rate
+    end_date = (datetime.now() + timedelta(days=days_left_val)).strftime("%d/%m/%Y")
+    days = round(days_left_val)
+    unit = "día" if days == 1 else "días"
+    return f"{rate:.1f} h/día · ≈ {days} {unit}", end_date
 
 
 def _week_chart(by_day: dict[date, float], width: int = 15) -> list[str]:
@@ -87,12 +109,15 @@ def _week_chart(by_day: dict[date, float], width: int = 15) -> list[str]:
         label = _DAY_NAMES[day.weekday()]
         value = by_day.get(day)
         if value is None:
-            lines.append(f"{label} {'—':>4} {'░' * width}")
-        elif peak <= 0:
-            lines.append(f"{label} {value:4.1f} {'░' * width}")
-        else:
-            filled = round(value / peak * width)
-            lines.append(f"{label} {value:4.1f} {'█' * filled}{'░' * (width - filled)}")
+            lines.append(f" [{_MUTED}]{label} {'—':>4} {'░' * width}[/]")
+            continue
+        exact = value / peak * width if peak > 0 else 0.0
+        full = round(exact)
+        color = f"bold {_ACCENT}" if day == today else _ACCENT
+        empty = max(0, width - full)
+        bar = f"[{color}]{'█' * full}[/][{_MUTED}]{'░' * empty}[/]"
+        number = f"[bold]{value:4.1f}[/]" if day == today else f"{value:4.1f}"
+        lines.append(f" {label} {number} {bar}")
     return lines
 
 
@@ -107,6 +132,7 @@ class WatchState:
     alerted: bool = False
     history: list[tuple[float, float]] = field(default_factory=list)
     speedtest_running: bool = False
+    speed_error: str | None = None
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -132,12 +158,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers = parser.add_subparsers(dest="command", metavar="[comando]")
 
-    once = subparsers.add_parser("once", help="Consulta única y salir (ideal para scripts).")
-    once.add_argument("--json", action="store_true", help="Salida en formato JSON.")
-    once.add_argument("--no-speedtest", action="store_true", help="Omite la prueba de velocidad.")
-    once.add_argument("--no-history", action="store_true", help="No guarda en el historial.")
-
-    status = subparsers.add_parser("status", help="Alias de 'once' para consulta rápida.")
+    status = subparsers.add_parser("status", help="Consulta única y salir (ideal para scripts).")
     status.add_argument("--json", action="store_true", help="Salida en formato JSON.")
     status.add_argument("--no-speedtest", action="store_true", help="Omite la prueba de velocidad.")
     status.add_argument("--no-history", action="store_true", help="No guarda en el historial.")
@@ -154,6 +175,9 @@ def build_parser() -> argparse.ArgumentParser:
     init.add_argument("--force", action="store_true", help="Sobrescribir config.toml existente.")
 
     doctor = subparsers.add_parser("doctor", help="Diagnóstico de configuración, red y conectividad.")
+
+    # Sin subcomando se ejecuta `watch`, así que su namespace necesita las mismas opciones.
+    parser.set_defaults(interval=None, speedtest_interval=None, no_speedtest=False, history=None)
 
     return parser
 
@@ -186,16 +210,12 @@ def _account_to_dict(account: AccountInfo, hours: float | None, speed: SpeedResu
 
 def _run_speedtest(config: Config) -> SpeedResult:
     s = config.speedtest
-    client = LibreSpeedClient(
-        base_url=s.base_url,
-        dl_url=s.dl_url,
-        ul_url=s.ul_url,
-        ping_url=s.ping_url,
-        get_ip_url=s.get_ip_url,
-        download_chunks=s.download_chunks,
-        upload_kib=s.upload_kib,
-        concurrent=s.concurrent,
+    client = FastClient(
+        api_url=s.api_url,
+        token=s.token,
+        connections=s.connections,
         max_duration=s.max_duration,
+        max_mb=s.max_mb,
     )
     return client.run()
 
@@ -212,7 +232,7 @@ def _sample_dict(config: Config, state: WatchState) -> dict:
     }
 
 
-def command_once(config: Config, args: argparse.Namespace) -> int:
+def command_status(config: Config, args: argparse.Namespace) -> int:
     client = SecurePortalClient()
     try:
         portal = client.init_session()
@@ -222,20 +242,20 @@ def command_once(config: Config, args: argparse.Namespace) -> int:
         console.print("[yellow]Sugerencia:[/yellow] Asegúrate de estar conectado a la red Nauta (WiFi/cable de ETECSA).")
         console.print("[yellow]          [/yellow] Usa [bold]nauta-monitor doctor[/bold] para diagnóstico detallado.")
         return _EXIT_ERROR
-    if getattr(args, "verbose", False):
+    if args.verbose:
         console.print(f"[dim]--- HTML ---\n{raw}\n--- (fin) ---[/dim]")
 
     account = parse_account_info(raw)
     hours = hours_from_credit(account.credit, config.cup_per_hour)
     speed = None
-    if not getattr(args, "no_speedtest", False) and config.speedtest_interval > 0:
+    if not args.no_speedtest and config.speedtest_interval > 0:
         try:
             speed = _run_speedtest(config)
         except SpeedtestError as exc:
             console.print(f"[yellow]Speedtest: {exc}[/yellow]")
-            console.print("[dim]El speedtest usa el servidor LibreSpeed de ETECSA. Puede fallar si no es accesible.[/dim]")
+            console.print("[dim]El speedtest usa fast.com y necesita internet activo (sesión Nauta iniciada).[/dim]")
 
-    if getattr(args, "json", False):
+    if args.json:
         console.print_json(json.dumps(_account_to_dict(account, hours, speed)))
     else:
         console.print(render_account(account, hours, speed))
@@ -243,7 +263,7 @@ def command_once(config: Config, args: argparse.Namespace) -> int:
             console.print()
             console.print(render_sessions(account))
 
-    if not getattr(args, "no_history", False):
+    if not args.no_history:
         state = WatchState(account=account, hours=hours, speed=speed)
         try:
             append_sample(config.history_path, _sample_dict(config, state))
@@ -269,13 +289,26 @@ def _refresh_saldo(config: Config, state: WatchState) -> None:
 def _refresh_speedtest(config: Config, state: WatchState, on_done=None) -> None:
     try:
         state.speed = _run_speedtest(config)
+        state.speed_error = None
         state.status = "Speedtest completado"
     except SpeedtestError as exc:
+        state.speed_error = str(exc)
         state.status = f"Speedtest falló: {exc}"
     finally:
         state.speedtest_running = False
     if on_done is not None:
         on_done(state)
+
+
+def _start_speedtest(config: Config, state: WatchState, on_done=None) -> None:
+    state.speedtest_running = True
+    state.speed_error = None
+    threading.Thread(
+        target=_refresh_speedtest,
+        args=(config, state),
+        kwargs={"on_done": on_done},
+        daemon=True,
+    ).start()
 
 
 def _check_alert(config: Config, state: WatchState, out: Console = console) -> None:
@@ -318,61 +351,111 @@ def _watch_line(state: WatchState) -> str:
     return " ".join(parts)
 
 
+def _speed_cell(state: WatchState) -> str:
+    if state.speedtest_running:
+        frame = _PIXEL_SPINNER[int(time.monotonic() * 4) % len(_PIXEL_SPINNER)]
+        return f"[bold {_ACCENT}]{frame}[/] Midiendo velocidad…"
+    if state.speed_error:
+        return f"[bold {_WARN}]⚠[/] {_short_speed_error(state.speed_error)}"
+    speed = state.speed
+    if speed is None:
+        return f"[{_MUTED}]Sin medición[/]"
+    parts: list[str] = []
+    if speed.download_mbps is not None:
+        parts.append(f"↓ {speed.download_mbps:.2f}")
+    if speed.upload_mbps is not None:
+        parts.append(f"↑ {speed.upload_mbps:.2f}")
+    if not parts:
+        return f"[{_MUTED}]—[/]"
+    return f"[bold]{' · '.join(parts)}[/] [{_MUTED}]Mbps[/]"
+
+
 def _watch_panel(state: WatchState) -> Panel:
-    grid = Table(show_header=False, box=None, expand=False)
-    grid.add_column(justify="right", style="bold", no_wrap=True)
+    grid = Table(show_header=False, box=None, expand=False, padding=(0, 1))
+    grid.add_column(no_wrap=True)
     grid.add_column(no_wrap=True)
 
     if state.account is None:
-        grid.add_row("Saldo", state.status)
-        return Panel(grid, title="Nauta Hogar", expand=False)
+        grid.add_row(f"[{_ACCENT}]▸[/] [bold]Saldo[/]", state.status)
+        return Panel(
+            grid,
+            title="Nauta Monitor",
+            title_align="left",
+            border_style=_ACCENT,
+            box=box.HEAVY,
+            expand=False,
+        )
 
     account = state.account
-    credit = f"{account.credit:.2f} CUP" if account.credit is not None else "—"
-    grid.add_row("Crédito", credit)
+    credit = (
+        f"[bold]{account.credit:.2f}[/] [{_MUTED}]CUP[/]"
+        if account.credit is not None
+        else f"[{_MUTED}]—[/]"
+    )
+    grid.add_row(f"[{_ACCENT}]▸[/] [bold]Crédito[/]", credit)
 
     hours_text = format_hours(state.hours) if state.hours is not None else "—"
-    grid.add_row("Horas", hours_text, style=_hours_style(state.hours))
+    grid.add_row(
+        f"[{_ACCENT}]▸[/] [bold]Horas[/]",
+        f"[{_hours_style(state.hours)}]{hours_text}[/]",
+    )
 
     by_day = _consumption_by_day(state.history)
     rate = _consumption_rate(by_day)
     consumo_text, end_date = _days_left(state.hours, rate)
-    grid.add_row("Consumo", consumo_text)
+    grid.add_row(f"[{_ACCENT}]▸[/] [bold]Consumo[/]", consumo_text)
     if end_date and state.hours and state.hours > 0:
-        grid.add_row("Fin estimado", end_date)
+        grid.add_row(
+            f"[{_ACCENT}]▸[/] [bold]Fin estimado[/]",
+            f"[bold]{end_date}[/]",
+        )
 
-    if state.speedtest_running:
-        grid.add_row("Velocidad", "Midiendo velocidad...")
-    else:
-        speed = state.speed
-        if speed is None:
-            grid.add_row("Velocidad", "Sin medición")
-        else:
-            parts = []
-            if speed.download_mbps is not None:
-                parts.append(f"↓ {speed.download_mbps:.2f}")
-            if speed.upload_mbps is not None:
-                parts.append(f"↑ {speed.upload_mbps:.2f}")
-            grid.add_row("Velocidad", " · ".join(parts) + " Mbps" if parts else "—")
+    grid.add_row(f"[{_ACCENT}]▸[/] [bold]Velocidad[/]", _speed_cell(state))
 
     renderables: list[object] = [grid]
     if by_day:
-        renderables.append(Text("\nConsumo semanal (últimos 7 días)", style="bold"))
-        renderables.append(Text("\n".join(_week_chart(by_day))))
+        renderables.append(Text("\n Consumo semanal (últimos 7 días)", style="bold"))
+        renderables.append(Text.from_markup("\n".join(_week_chart(by_day))))
     else:
-        renderables.append(Text("\nSin historial suficiente para el gráfico", style="dim"))
+        renderables.append(
+            Text("\n Sin historial suficiente para el gráfico", style=_MUTED)
+        )
 
-    status_line = f"[dim]Actualizado: {datetime.now().strftime('%H:%M:%S')} | {state.status}[/dim]"
-    renderables.append(Text(f"\n{status_line}"))
-    return Panel(Group(*renderables), title="Nauta Monitor", expand=False)
+    return Panel(
+        Group(*renderables),
+        title="Nauta Monitor",
+        title_align="left",
+        border_style=_ACCENT,
+        box=box.HEAVY,
+        expand=False,
+    )
 
 
-def command_watch(config: Config, args: argparse.Namespace) -> int:
-    saldo_interval = args.interval if args.interval else config.saldo_interval
+def _watch_settings(config: Config, args: argparse.Namespace) -> tuple[int, int, str]:
+    """Resuelve intervalos y ruta de historial combinando flags y configuración."""
+    saldo_interval = args.interval if args.interval is not None else config.saldo_interval
     speedtest_interval = 0 if args.no_speedtest else config.speedtest_interval
     if args.speedtest_interval is not None:
         speedtest_interval = args.speedtest_interval
     history_path = args.history or config.history_path
+    return saldo_interval, speedtest_interval, history_path
+
+
+def _update(
+    config: Config, state: WatchState, history_path: str, out: Console, interactive: bool
+) -> None:
+    """Consulta el saldo, guarda la muestra y reporta el estado."""
+    _refresh_saldo(config, state)
+    if state.account is None:
+        return
+    append_sample(history_path, _sample_dict(config, state))
+    _check_alert(config, state, out=out)
+    if not interactive:
+        out.print(_watch_line(state))
+
+
+def command_watch(config: Config, args: argparse.Namespace) -> int:
+    saldo_interval, speedtest_interval, history_path = _watch_settings(config, args)
 
     interactive = sys.stdout.isatty()
     out = console if interactive else Console(color_system=None)
@@ -390,24 +473,16 @@ def command_watch(config: Config, args: argparse.Namespace) -> int:
             continue
         state.history.append((epoch, hours))
 
-    _refresh_saldo(config, state)
-    if state.account is not None:
-        append_sample(history_path, _sample_dict(config, state))
-        _check_alert(config, state, out=out)
-    if not interactive:
-        out.print(_watch_line(state))
+    _update(config, state, history_path, out, interactive)
     state.last_saldo_at = time.time()
     if speedtest_interval > 0:
-        state.speedtest_running = True
-        threading.Thread(
-            target=_refresh_speedtest, args=(config, state), kwargs={"on_done": on_done}, daemon=True
-        ).start()
+        _start_speedtest(config, state, on_done)
     state.last_speedtest_at = time.time()
 
     live_ctx = (
         Live(
             console=console,
-            refresh_per_second=1,
+            refresh_per_second=4,
             screen=True,
             get_renderable=lambda: _watch_panel(state),
         )
@@ -421,21 +496,10 @@ def command_watch(config: Config, args: argparse.Namespace) -> int:
                 now = time.time()
                 if now - state.last_saldo_at >= saldo_interval:
                     state.last_saldo_at = now
-                    _refresh_saldo(config, state)
-                    if state.account is not None:
-                        append_sample(history_path, _sample_dict(config, state))
-                        _check_alert(config, state, out=out)
-                    if not interactive:
-                        out.print(_watch_line(state))
+                    _update(config, state, history_path, out, interactive)
                 if speedtest_interval > 0 and now - state.last_speedtest_at >= speedtest_interval:
                     state.last_speedtest_at = now
-                    state.speedtest_running = True
-                    threading.Thread(
-                        target=_refresh_speedtest,
-                        args=(config, state),
-                        kwargs={"on_done": on_done},
-                        daemon=True,
-                    ).start()
+                    _start_speedtest(config, state, on_done)
                 time.sleep(1)
     except KeyboardInterrupt:
         console.print("\n[yellow]Monitor detenido.[/yellow]")
@@ -506,15 +570,14 @@ speedtest_interval = {speedtest_interval}
 history_path = "history.jsonl"
 
 [speedtest]
-base_url = "http://speedtest.cd.etecsa.cu/"
-dl_url = "backend/garbage.php"
-ul_url = "backend/empty.php"
-ping_url = "backend/empty.php"
-get_ip_url = "backend/getIP.php"
-download_chunks = 200
-upload_kib = 256
-concurrent = 3
-max_duration = 20
+# fast.com (Netflix): mide tu velocidad real de internet internacional.
+api_url = "https://api.fast.com"
+# token = ""  # Vacío usa el token público de fast.com
+connections = 3
+# Segundos por dirección (descarga y subida).
+max_duration = 10
+# Tope de datos por dirección, en MB.
+max_mb = 50
 
 [alerts]
 min_balance_hours = 24
@@ -590,7 +653,7 @@ def command_doctor(args: argparse.Namespace) -> int:
     if config.speedtest_interval == 0:
         console.print("   Desactivado (speedtest_interval=0)")
     else:
-        console.print("   Probando servidor LibreSpeed...")
+        console.print("   Probando fast.com...")
         try:
             speed = _run_speedtest(config)
             console.print(f"   [green]OK[/green] - ↓ {speed.download_mbps:.2f} Mbps | ↑ {speed.upload_mbps:.2f} Mbps | Ping {speed.ping_ms:.1f} ms")
@@ -641,8 +704,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command is None:
         args.command = "watch"
-    if args.command in ("once", "status"):
-        return command_once(config, args)
+    if args.command == "status":
+        return command_status(config, args)
     if args.command == "watch":
         return command_watch(config, args)
     console.print("[red]Comando desconocido.[/red]")
