@@ -1,6 +1,6 @@
 # nauta-monitor
 
-Monitor sencillo y claro para tu cuenta **Nauta Hogar**. Consulta el saldo en CUP, calcula las horas de servicio restantes según tu tarifa, estima cuándo se te acabará el saldo y mide la velocidad real contra el servidor LibreSpeed de ETECSA.
+Monitor sencillo y claro para tu cuenta **Nauta Hogar**. Consulta el saldo en CUP, calcula las horas de servicio restantes según tu tarifa, estima cuándo se te acabará el saldo y mide la velocidad real de tu internet con fast.com.
 
 **Ideal para:** ver rápido cuánto te queda, vigilar tu consumo diario/semanal y tenerlo corriendo en segundo plano con Docker.
 
@@ -14,8 +14,9 @@ Replica el flujo del portal de acceso ETECSA:
    `CSRFHW` devuelve el estado de la cuenta: estado, **crédito en CUP**,
    fecha de expiración, áreas de acceso y las últimas sesiones.
 3. **Horas restantes = crédito / tarifa** (`cup_per_hour`, por defecto 12.5 CUP/h).
-4. La velocidad se mide con el protocolo LibreSpeed contra el servidor de
-   ETECSA (`http://speedtest.cd.etecsa.cu/`, configurable).
+4. La velocidad se mide contra **fast.com** (`api.fast.com`): latencia, bajada y
+   subida. Refleja tu internet internacional, así que necesita la sesión Nauta
+   activa y consume datos/tiempo real (`max_duration = 10` s por dirección).
 
 ## Instalación rápida (3 pasos)
 
@@ -36,6 +37,9 @@ nauta-monitor doctor           # Comprobar conexión y credenciales
 nauta-monitor                  # Ver panel en vivo
 ```
 
+En `cmd.exe` la ruta de activación usa barras invertidas (`.venv\Scripts\activate`) y el
+último paso lleva punto final: `pip install -e .`.
+
 ## Configuración
 
 Copia `config.example.toml` a `config.toml` y rellena tus datos:
@@ -47,9 +51,19 @@ username = "usuario@nauta.com.cu"
 cup_per_hour = 12.5              # CUPs que consume cada hora (tu tarifa)
 saldo_interval = 3600            # segundos entre consultas de saldo
 speedtest_interval = 1800        # segundos entre pruebas de velocidad (0 = off)
+
+[speedtest]
+api_url = "https://api.fast.com" # fast.com (Netflix)
+connections = 3                  # conexiones paralelas de descarga
+max_duration = 10                # segundos por dirección
+max_mb = 50                      # tope de datos por dirección
 ```
 
 También se aceptan `NAUTA_USERNAME` y `NAUTA_PASS` como variables de entorno.
+
+El speedtest mide contra **fast.com**, así que consume datos y tiempo de conexión
+real: con `speedtest_interval = 1800` son unos 16 minutos al día. Si te importa el
+saldo, usa `3600` o desactívalo con `0`.
 
 ## Uso
 
@@ -58,7 +72,7 @@ También se aceptan `NAUTA_USERNAME` y `NAUTA_PASS` como variables de entorno.
 nauta-monitor
 
 # Consulta rápida
-nauta-monitor status        # o: nauta-monitor once
+nauta-monitor status        # Consulta única
 nauta-monitor status --json # Para scripts/automatismos
 
 # Diagnóstico
@@ -70,11 +84,20 @@ nauta-monitor init
 
 `watch` (por defecto) muestra un panel limpio con el **crédito**, las **horas restantes**,
 el **consumo medio** (horas/día), **fin estimado** del saldo al ritmo actual y la
-**velocidad** real (↓/↑). Debajo aparece un gráfico de barras con el consumo de los
+**velocidad** real contra fast.com (↓/↑). Debajo aparece un gráfico de barras con el consumo de los
 últimos 7 días (calculado del historial; los huecos largos se ignoran).
 
 Si la salida no es una terminal (contenedor, systemd, redirección a archivo)
 escribe una línea de log por cada actualización, sin códigos ANSI.
+
+Opciones del modo `watch` (todas opcionales):
+
+```bash
+nauta-monitor watch --interval 1800           # segundos entre consultas de saldo
+nauta-monitor watch --speedtest-interval 3600 # segundos entre speedtests
+nauta-monitor watch --no-speedtest            # desactiva el speedtest
+nauta-monitor watch --history ruta/hist.jsonl  # historial alternativo
+```
 
 ### Alerta por saldo bajo
 
@@ -197,7 +220,7 @@ otro `split-window` + `send-keys` (p. ej. `docker logs -f <otro-servicio>`).
 
 ## Documentación
 
-- **Online**: [Documentación completa](docs/) (se puede publicar con GitHub Pages)
+- **Online**: [Documentación completa](https://dlampatricio.github.io/nauta_monitor/)
 - **Local**: `pip install mkdocs mkdocs-material && mkdocs serve`
 
 ## Desarrollo

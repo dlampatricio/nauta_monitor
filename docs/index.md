@@ -1,6 +1,6 @@
 # nauta-monitor
 
-Monitor sencillo y claro para tu cuenta **Nauta Hogar**. Consulta el saldo en CUP, calcula las horas de servicio restantes, estima cuándo se te acabará y mide la velocidad real contra el servidor LibreSpeed de ETECSA.
+Monitor sencillo y claro para tu cuenta **Nauta Hogar**. Consulta el saldo en CUP, calcula las horas de servicio restantes, estima cuándo se te acabará y mide la velocidad real de tu internet con fast.com.
 
 ## Características
 

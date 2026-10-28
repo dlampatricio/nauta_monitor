@@ -6,8 +6,7 @@
 |---------|-------------|
 | `nauta-monitor` | Panel en vivo (por defecto). Se actualiza automáticamente. |
 | `nauta-monitor watch` | Igual que el anterior, con opciones avanzadas. |
-| `nauta-monitor status` | Consulta única, ideal para scripts. Alias de `once`. |
-| `nauta-monitor once` | Consulta única con opciones avanzadas. |
+| `nauta-monitor status` | Consulta única, ideal para scripts. |
 | `nauta-monitor init` | Asistente interactivo para crear `config.toml`. |
 | `nauta-monitor doctor` | Diagnóstico completo (config, red, portal, speedtest). |
 
@@ -17,11 +16,10 @@ El panel muestra:
 
 - **Crédito** - Saldo actual en CUP
 - **Horas** - Horas restantes calculadas
-- **Consumo** - Consumo medio (h/día) y días estimados hasta agotarse, con fecha aproximada
+- **Consumo** - Consumo medio (h/día) y días estimados hasta agotarse
 - **Fin estimado** - Fecha aproximada cuando se acabará el saldo al ritmo actual
-- **Velocidad** - Última medición (↓/↑ Mbps) o estado de medición
+- **Velocidad** - Última medición contra fast.com (↓/↑ Mbps), estado de medición o error
 - **Consumo semanal** - Gráfico de barras con los últimos 7 días
-- **Actualizado** - Hora de última actualización y estado
 
 ## Consulta única
 

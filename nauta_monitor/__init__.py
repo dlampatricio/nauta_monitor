@@ -1,3 +1,3 @@
 """Monitor de cuenta Nauta Hogar: saldo, horas restantes y velocidad real."""
 
-__version__ = "0.2.0"
+__version__ = "0.4.0"

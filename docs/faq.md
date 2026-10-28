@@ -22,7 +22,7 @@ Se basa en tu **consumo real** de los últimos días (promedio de horas/día). S
 **¿Por qué se ignoran huecos largos en el gráfico?**
 Para no distorsionar el promedio. Si el monitor estuvo apagado varios días, esos saltos se ignoran al calcular consumo.
 
-**¿Qué hace "once/status"?**
+**¿Qué hace `status`?**
 Hace una única consulta y sale. Perfecto para scripts, cron o healthchecks.
 
 ## Docker
@@ -42,7 +42,13 @@ No, si montas el volumen `./data:/app/data` o usas `history.jsonl` persistente. 
 No. Puedes poner `speedtest_interval = 0` o usar `--no-speedtest`.
 
 **¿Por qué da valores bajos?**
-Usa el servidor LibreSpeed de ETECSA en Cuba. Los resultados son representativos del enlace real en esa red.
+Mide contra **fast.com** (Netflix), normalmente el servidor de Miami. Refleja tu velocidad **internacional** real, que en Nauta suele ser mucho menor que la del servidor interno de ETECSA.
+
+**¿Por qué falla el speedtest si el saldo se consulta bien?**
+La consulta de saldo va al portal de ETECSA (red interna), pero fast.com necesita internet internacional. Si la sesión Nauta no está iniciada o se cayó, el speedtest fallará aunque el saldo se lea correctamente.
+
+**¿Cuánto consume cada speedtest?**
+`max_duration = 10` segundos de bajada + 10 de subida por prueba (más el tráfico del momento). Con `speedtest_interval = 1800` son ~48 pruebas al día: unos 16 minutos diarios de conexión a full. Si te importa el saldo, usa `3600` o desactívalo con `0`.
 
 ## Desarrollo
 

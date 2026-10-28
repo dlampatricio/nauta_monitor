@@ -30,20 +30,35 @@ speedtest_interval = 1800      # Segundos entre speedtests (0 = desactivado)
 history_path = "history.jsonl"
 
 [speedtest]
-base_url = "http://speedtest.cd.etecsa.cu/"
-dl_url = "backend/garbage.php"
-ul_url = "backend/empty.php"
-ping_url = "backend/empty.php"
-get_ip_url = "backend/getIP.php"
-download_chunks = 200
-upload_kib = 256
-concurrent = 3
-max_duration = 20
+# fast.com (Netflix). Necesita sesión Nauta activa (internet internacional).
+api_url = "https://api.fast.com"
+# token = ""                   # vacío = token público de fast.com
+connections = 3                # conexiones paralelas de descarga
+max_duration = 10              # segundos por dirección (bajada y subida)
+max_mb = 50                    # tope de datos por dirección, en MB
 
 [alerts]
 min_balance_hours = 24         # Alerta cuando queden menos de estas horas
 # on_alert = "notify-send 'Nauta' 'Quedan menos de 24 horas'"
 ```
+
+## Speedtest (fast.com)
+
+`[speedtest]` configura la medición de velocidad. Usa los mismos endpoints que el
+cliente JS de **fast.com** (Netflix), sin navegador ni dependencias extra:
+
+| Clave | Por defecto | Descripción |
+|-------|-------------|-------------|
+| `api_url` | `https://api.fast.com` | Base de los endpoints de fast.com |
+| `token` | vacío | Token público; déjalo vacío salvo que Netflix lo cambie |
+| `connections` | `3` | Conexiones paralelas de descarga (1–8) |
+| `max_duration` | `10` | Segundos por dirección (descarga y subida) |
+| `max_mb` | `50` | Tope de datos por dirección, en MB |
+
+La prueba necesita **internet internacional activo** (sesión Nauta iniciada): el
+saldo se consulta en la red interna de ETECSA, pero fast.com no. Cada prueba
+consume datos y tiempo real; con `speedtest_interval = 1800` son ~16 min/día, así
+que `3600` (8 min/día) o `0` son alternativas razonables.
 
 ## Variables de entorno
 

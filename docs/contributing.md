@@ -36,7 +36,7 @@ nauta_monitor/
 ├── config.py     # Configuración
 ├── display.py    # Renderizado
 ├── history.py    # Historial JSONL
-├── speedtest.py  # LibreSpeed client
+├── speedtest.py  # Cliente de fast.com (speedtest)
 └── calc.py       # Cálculos
 ```
 

@@ -18,7 +18,7 @@
 **Causa:** Estás en red Nauta pero el portal responde de forma distinta o hay caché.
 
 **Solución:**
-1. Usa `nauta-monitor status --verbose` para ver la respuesta HTML
+1. Usa `nauta-monitor --verbose status` para ver la respuesta HTML
 2. Verifica que no hay captive portal intermedio
 3. Intenta con otra conexión Nauta
 
@@ -39,12 +39,36 @@ nauta-monitor init
 
 ### "Speedtest falló"
 
-**Causa:** El servidor LibreSpeed de ETECSA no es accesible desde tu red.
+**Causa:** No hay internet internacional activo (sesión Nauta caída) o `api.fast.com` no es accesible.
 
 **Solución:**
 - Es **normal** y **no crítico**. El monitor sigue mostrando saldo/horas
-- Puedes desactivarlo: `speedtest_interval = 0` en `config.toml`
-- O cambiar el servidor en `[speedtest]` si conoces otro
+- Comprueba que puedes abrir `https://fast.com` en el navegador
+- Si tu red bloquea fast.com, desactívalo: `speedtest_interval = 0` en `config.toml`
+- Si cambió el token, ponlo en `[speedtest] token = "..."`
+
+---
+
+### `'.venv' is not recognized as an internal or external command` (Windows)
+
+**Causa:** En `cmd.exe` la ruta se escribe con **barras invertidas** (`\`), no con `/`.
+
+**Solución:**
+```bat
+.venv\Scripts\activate
+```
+
+- PowerShell: `.venv\Scripts\Activate.ps1` (si bloquea scripts: `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`).
+- Instala el proyecto con el punto final: `pip install -e .` (no `pip install -e`).
+- Comprueba que el comando existe con `where nauta-monitor`.
+
+---
+
+### `AttributeError: 'Namespace' object has no attribute 'interval'`
+
+**Causa:** Bug de las versiones ≤ 0.2.0 al ejecutar `nauta-monitor` sin subcomando.
+
+**Solución:** Actualiza a 0.3.0 (o usa `nauta-monitor watch` mientras tanto).
 
 ---
 
@@ -75,7 +99,7 @@ nauta-monitor init
 nauta-monitor doctor
 
 # Ver config cargada
-nauta-monitor status --verbose  # Muestra más info en errores
+nauta-monitor --verbose status  # Muestra el HTML crudo del portal
 
 # Comprobar versión
 nauta-monitor --version
