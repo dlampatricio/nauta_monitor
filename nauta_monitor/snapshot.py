@@ -1,4 +1,4 @@
-"""Small, read-only status contract for local desktop consumers."""
+"""Contrato de estado compacto y de solo lectura para integraciones locales."""
 
 from __future__ import annotations
 
@@ -10,13 +10,13 @@ from nauta_monitor.private_files import write_private_text
 
 
 def write_snapshot(path: str | Path, snapshot: dict) -> None:
-    """Replace the published snapshot without exposing partial writes."""
+    """Publica el snapshot mediante reemplazo atómico, sin escrituras parciales."""
     payload = json.dumps(snapshot, ensure_ascii=False, allow_nan=False)
     write_private_text(path, payload + "\n")
 
 
 def read_snapshot(path: str | Path) -> dict | None:
-    """Read a known snapshot version; malformed or foreign data is ignored."""
+    """Lee una versión conocida del snapshot e ignora datos inválidos o ajenos."""
     try:
         raw = Path(path).read_text(encoding="utf-8")
         if len(raw) > 4096:

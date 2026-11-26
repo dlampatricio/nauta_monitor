@@ -133,6 +133,7 @@ Ui.BarWidget {
         root.changingCredentials = false
         root.showingPassword = false
         if (exitCode === 0) {
+          root.credentialsConfigured = true
           root.editingCredentials = false
           Qt.callLater(function() { root.runControl(["install"]) })
         }
@@ -182,7 +183,7 @@ Ui.BarWidget {
     onLoadFailed: root.snapshot = null
   }
 
-  // Polling also catches initial creation and atomic file replacement.
+  // La lectura periódica detecta la creación inicial y el reemplazo atómico.
   Timer {
     interval: 30000
     running: true
@@ -194,7 +195,7 @@ Ui.BarWidget {
     id: button
     anchors.fill: parent
     bar: root.bar
-    text: "\uf124" // Font Awesome location arrow (Nerd Fonts).
+    text: "\uf124" // Icono de ubicación de Font Awesome (Nerd Fonts).
     tooltipText: "Nauta Hogar"
     labelText: root.vertical || root.hoursText === "—" ? ""
       : root.hoursText + (root.freshness === "fresh" ? "" : " !")

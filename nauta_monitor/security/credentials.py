@@ -1,4 +1,4 @@
-"""Portable user-level credential management, separate from service control."""
+"""Gestión portable de credenciales de usuario, separada del control del servicio."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ import os
 import re
 import sys
 from pathlib import Path
+from types import ModuleType
 
 from nauta_monitor.private_files import write_private_text
 
@@ -34,7 +35,7 @@ def _emit(
     return 1 if error else 0
 
 
-def _toml_module():
+def _toml_module() -> ModuleType:
     try:
         import tomllib
     except ImportError:  # pragma: no cover - Python 3.9/3.10
@@ -43,27 +44,31 @@ def _toml_module():
 
 
 def _inline_comment(line: str, start: int) -> str:
+    """Devuelve el comentario TOML final sin confundirlo con texto entre comillas."""
     quote: str | None = None
     escaped = False
-    for index in range(start, len(line)):
-        char = line[index]
+    for index, char in enumerate(line[start:], start):
         if quote == '"':
             if escaped:
                 escaped = False
             elif char == "\\":
                 escaped = True
-            elif char == '"':
+            elif char == quote:
                 quote = None
-        elif quote == "'":
-            if char == "'":
+            continue
+
+        if quote == "'":
+            if char == quote:
                 quote = None
-        elif char in ('"', "'"):
+            continue
+
+        if char in ('"', "'"):
             quote = char
         elif char == "#":
-            whitespace_start = index
-            while whitespace_start > start and line[whitespace_start - 1] in (" ", "\t"):
-                whitespace_start -= 1
-            return line[whitespace_start:]
+            comment_start = index
+            while comment_start > start and line[comment_start - 1] in (" ", "\t"):
+                comment_start -= 1
+            return line[comment_start:]
     return ""
 
 
@@ -175,7 +180,8 @@ def remove() -> int:
     result = _update_credentials(username="", password="", success_message=None)
     if result:
         return result
-    # Empty TOML strings mean unset to the app's legacy configuration loader.
+    # Las cadenas TOML vacías se interpretan como valores no definidos al cargar
+    # la configuración con el cargador heredado de la aplicación.
     return _emit("Credenciales eliminadas.")
 
 

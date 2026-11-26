@@ -1,4 +1,4 @@
-"""Atomic writers for per-user configuration and status files."""
+"""Escritura atómica de archivos de configuración y estado del usuario."""
 
 from __future__ import annotations
 
@@ -8,11 +8,9 @@ from pathlib import Path
 
 
 def write_private_text(path: str | Path, text: str) -> None:
-    """Atomically replace a UTF-8 file with user-only permissions on POSIX."""
+    """Reemplaza un archivo UTF-8 de forma atómica y con permisos privados."""
     target = Path(path)
     target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-    if os.name == "posix":
-        os.chmod(target.parent, 0o700)
     fd, name = tempfile.mkstemp(prefix=f".{target.name}.", dir=target.parent, text=True)
     temporary = Path(name)
     try:

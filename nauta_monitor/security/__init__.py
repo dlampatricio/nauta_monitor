@@ -1,1 +1,1 @@
-"""Portable security-sensitive helpers for Nauta Monitor."""
+"""Funciones portables relacionadas con la seguridad de Nauta Monitor."""

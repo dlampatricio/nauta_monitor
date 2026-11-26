@@ -1,4 +1,4 @@
-"""Optional Linux/systemd user-service backend; the monitor itself is portable."""
+"""Backend opcional de servicio systemd de usuario para Linux."""
 
 from __future__ import annotations
 
@@ -48,10 +48,12 @@ def _install_service() -> int:
     config_home = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
     unit_path = config_home / "systemd" / "user" / SERVICE_NAME
     config = config_path()
-    snapshot = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local" / "state")) / "nauta-monitor" / "status.json"
+    state_dir = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local" / "state")) / "nauta-monitor"
+    snapshot = state_dir / "status.json"
+    history = state_dir / "history.jsonl"
     try:
-        snapshot.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-        os.chmod(snapshot.parent, 0o700)
+        state_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+        os.chmod(state_dir, 0o700)
     except OSError:
         return _emit("No se pudo preparar el directorio privado de estado.", error=True)
 
@@ -60,7 +62,7 @@ def _install_service() -> int:
 
     command = " ".join(quote(arg) for arg in (
         str(executable), "--config", str(config), "watch",
-        "--no-speedtest", "--snapshot", str(snapshot),
+        "--no-speedtest", "--history", str(history), "--snapshot", str(snapshot),
     ))
     unit = (
         "[Unit]\nDescription=Nauta Hogar balance monitor\n"
@@ -70,7 +72,7 @@ def _install_service() -> int:
         "Restart=on-failure\nRestartSec=15\n"
         "UMask=0077\nNoNewPrivileges=true\n"
         "ProtectSystem=strict\nProtectHome=read-only\n"
-        f"ReadWritePaths={quote(str(snapshot.parent))}\n\n"
+        f"ReadWritePaths={quote(str(state_dir))}\n\n"
         "[Install]\nWantedBy=default.target\n"
     )
     try:

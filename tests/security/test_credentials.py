@@ -41,8 +41,8 @@ def test_credentials_update_preserves_existing_account_settings(tmp_path, monkey
     path = credentials.config_path()
     path.parent.mkdir(parents=True)
     path.write_text(
-        "# Existing user settings must survive credential changes.\n"
-        '[nauta]\nusername = "old"\npassword = "old-pass"  # Keep this note.\ncup_per_hour = 15\n'
+        "# La configuración existente debe conservarse al cambiar credenciales.\n"
+        '[nauta]\nusername = "old"\npassword = "old-pass"  # Conservar esta nota.\ncup_per_hour = 15\n'
         "saldo_interval = 900\nspeedtest_interval = 0\n"
         '[alerts]\nmin_balance_hours = 8\non_alert = "notify-send nauta"\n',
         encoding="utf-8",
@@ -55,8 +55,8 @@ def test_credentials_update_preserves_existing_account_settings(tmp_path, monkey
     assert credentials.main(["save"]) == 0
     text = path.read_text()
     config = tomllib.loads(text)
-    assert "# Existing user settings must survive credential changes." in text
-    assert "# Keep this note." in text
+    assert "# La configuración existente debe conservarse al cambiar credenciales." in text
+    assert "# Conservar esta nota." in text
     assert config["nauta"] == {
         "username": "new",
         "password": "new-pass",
@@ -89,3 +89,17 @@ def test_credentials_directory_follows_each_platform_convention(tmp_path, monkey
     monkeypatch.setattr(credentials.sys, "platform", "win32")
     monkeypatch.setenv("APPDATA", str(tmp_path / "roaming"))
     assert credentials.config_path() == tmp_path / "roaming/nauta-monitor/config.toml"
+
+
+def test_private_writer_does_not_change_existing_parent_permissions(tmp_path):
+    from nauta_monitor.private_files import write_private_text
+
+    parent = tmp_path / "shared"
+    parent.mkdir(mode=0o755)
+    parent.chmod(0o755)
+
+    write_private_text(parent / "status.json", "{}\n")
+
+    if os.name == "posix":
+        assert parent.stat().st_mode & 0o777 == 0o755
+        assert (parent / "status.json").stat().st_mode & 0o777 == 0o600
