@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import shlex
 import subprocess
 import sys
@@ -21,11 +22,12 @@ from rich.text import Text
 
 from nauta_monitor import __version__
 from nauta_monitor.calc import format_hours, hours_from_credit
-from nauta_monitor.client import PortalError, SecurePortalClient
+from nauta_monitor.client import PortalError, QueryError, SecurePortalClient
 from nauta_monitor.config import Config, ConfigError, load_config
 from nauta_monitor.display import console, render_account, render_sessions
 from nauta_monitor.history import append_sample, load_recent
 from nauta_monitor.parser import AccountInfo, parse_account_info
+from nauta_monitor.snapshot import read_snapshot, write_snapshot
 from nauta_monitor.speedtest import FastClient, SpeedResult, SpeedtestError
 
 _EXIT_OK = 0
@@ -133,6 +135,7 @@ class WatchState:
     history: list[tuple[float, float]] = field(default_factory=list)
     speedtest_running: bool = False
     speed_error: str | None = None
+    last_saldo_success_at: int | None = None
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -170,6 +173,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     watch.add_argument("--no-speedtest", action="store_true", help="Desactiva las pruebas de velocidad.")
     watch.add_argument("--history", default=None, help="Ruta del archivo de historial.")
+    watch.add_argument("--snapshot", default=None, help="Publica el último estado en este archivo JSON.")
 
     init = subparsers.add_parser("init", help="Asistente interactivo para crear config.toml.")
     init.add_argument("--force", action="store_true", help="Sobrescribir config.toml existente.")
@@ -177,7 +181,7 @@ def build_parser() -> argparse.ArgumentParser:
     doctor = subparsers.add_parser("doctor", help="Diagnóstico de configuración, red y conectividad.")
 
     # Sin subcomando se ejecuta `watch`, así que su namespace necesita las mismas opciones.
-    parser.set_defaults(interval=None, speedtest_interval=None, no_speedtest=False, history=None)
+    parser.set_defaults(interval=None, speedtest_interval=None, no_speedtest=False, history=None, snapshot=None)
 
     return parser
 
@@ -233,7 +237,7 @@ def _sample_dict(config: Config, state: WatchState) -> dict:
 
 
 def command_status(config: Config, args: argparse.Namespace) -> int:
-    client = SecurePortalClient()
+    client = SecurePortalClient(interface=config.portal_interface)
     try:
         portal = client.init_session()
         raw = client.query_account_raw(config.username, config.password, portal)
@@ -272,22 +276,29 @@ def command_status(config: Config, args: argparse.Namespace) -> int:
     return _EXIT_OK
 
 
-def _refresh_saldo(config: Config, state: WatchState) -> None:
-    client = SecurePortalClient()
+def _refresh_saldo(config: Config, state: WatchState) -> bool:
+    client = SecurePortalClient(interface=config.portal_interface)
     try:
         portal = client.init_session()
         account = client.query_account(config.username, config.password, portal)
+        if account.credit is None or not math.isfinite(account.credit) or account.credit < 0:
+            raise QueryError("El portal no devolvió un saldo válido.")
+        hours = hours_from_credit(account.credit, config.cup_per_hour)
+        now = time.time()
         state.account = account
-        state.hours = hours_from_credit(account.credit, config.cup_per_hour)
+        state.hours = hours if math.isfinite(hours) and hours >= 0 else None
+        state.last_saldo_success_at = int(now)
         if state.hours is not None:
-            state.history.append((time.time(), state.hours))
+            state.history.append((now, state.hours))
         state.status = "Saldo actualizado"
+        return True
     except PortalError as exc:
         # Do not keep presenting a previous balance as current after losing
         # access to the Nauta portal.
         state.account = None
         state.hours = None
         state.status = f"Error al consultar saldo: {exc}"
+        return False
 
 
 def _refresh_speedtest(config: Config, state: WatchState, on_done=None) -> None:
@@ -446,14 +457,35 @@ def _watch_settings(config: Config, args: argparse.Namespace) -> tuple[int, int,
 
 
 def _update(
-    config: Config, state: WatchState, history_path: str, out: Console, interactive: bool
+    config: Config,
+    state: WatchState,
+    history_path: str,
+    out: Console,
+    interactive: bool,
+    *,
+    snapshot_path: str | None,
+    saldo_interval: int,
 ) -> None:
-    """Consulta el saldo, guarda la muestra y reporta el estado."""
-    _refresh_saldo(config, state)
-    if state.account is None:
-        return
-    append_sample(history_path, _sample_dict(config, state))
-    _check_alert(config, state, out=out)
+    """Publica el resultado de cada intento; solo guarda muestras nuevas."""
+    success = _refresh_saldo(config, state)
+    if snapshot_path:
+        account_status = state.account.account_status if state.account else None
+        try:
+            write_snapshot(snapshot_path, {
+                "version": 1,
+                "credit_cup": state.account.credit if state.account else None,
+                "hours": state.hours,
+                "account_status": account_status[:128] if account_status else None,
+                "last_success_at": state.last_saldo_success_at,
+                "last_attempt_at": state.last_saldo_success_at if success else int(time.time()),
+                "result": "ok" if success else "error",
+                "stale_after_seconds": max(0, saldo_interval) + 60,
+            })
+        except OSError as exc:
+            print(f"No se pudo publicar el estado de Nauta: {exc}", file=sys.stderr)
+    if success:
+        append_sample(history_path, _sample_dict(config, state))
+        _check_alert(config, state, out=out)
     if not interactive:
         out.print(_watch_line(state))
 
@@ -466,6 +498,22 @@ def command_watch(config: Config, args: argparse.Namespace) -> int:
     on_done = (lambda state: out.print(_watch_line(state))) if not interactive else None
 
     state = WatchState()
+    if args.snapshot:
+        previous = read_snapshot(args.snapshot)
+        if previous and previous["last_success_at"] is not None:
+            state.account = AccountInfo(
+                account_status=previous.get("account_status"),
+                credit=previous["credit_cup"],
+            )
+            state.hours = previous.get("hours")
+            state.last_saldo_success_at = previous["last_success_at"]
+
+    def update_saldo() -> None:
+        _update(
+            config, state, history_path, out, interactive,
+            snapshot_path=args.snapshot, saldo_interval=saldo_interval,
+        )
+
     for entry in load_recent(history_path, limit=500):
         hours = entry.get("hours")
         ts = entry.get("timestamp")
@@ -476,8 +524,12 @@ def command_watch(config: Config, args: argparse.Namespace) -> int:
         except ValueError:
             continue
         state.history.append((epoch, hours))
+    if state.last_saldo_success_at is not None and state.hours is not None and not any(
+        int(epoch) == state.last_saldo_success_at for epoch, _ in state.history
+    ):
+        state.history.append((float(state.last_saldo_success_at), state.hours))
 
-    _update(config, state, history_path, out, interactive)
+    update_saldo()
     state.last_saldo_at = time.time()
     if speedtest_interval > 0:
         _start_speedtest(config, state, on_done)
@@ -500,7 +552,7 @@ def command_watch(config: Config, args: argparse.Namespace) -> int:
                 now = time.time()
                 if now - state.last_saldo_at >= saldo_interval:
                     state.last_saldo_at = now
-                    _update(config, state, history_path, out, interactive)
+                    update_saldo()
                 if speedtest_interval > 0 and now - state.last_speedtest_at >= speedtest_interval:
                     state.last_speedtest_at = now
                     _start_speedtest(config, state, on_done)
@@ -617,6 +669,9 @@ def command_doctor(args: argparse.Namespace) -> int:
         console.print(f"   Usuario: {'configurado' if config.username else '[red]FALTA[/red]'}")
         console.print(f"   Contraseña: {'configurada' if config.password else '[red]FALTA[/red]'}")
         console.print(f"   cup_per_hour: {config.cup_per_hour}")
+        console.print(
+            f"   Interfaz del portal: {config.portal_interface or 'ruta predeterminada'}"
+        )
         console.print(f"   saldo_interval: {config.saldo_interval}s, speedtest_interval: {config.speedtest_interval}s")
         console.print(f"   Historial: {config.history_path}")
     except ConfigError as exc:
@@ -633,7 +688,7 @@ def command_doctor(args: argparse.Namespace) -> int:
     console.print(f"\n[bold]2) Portal ETECSA[/bold]")
     console.print(f"   Intentando conectar a https://secure.etecsa.net:8443 ...")
     try:
-        client = SecurePortalClient()
+        client = SecurePortalClient(interface=config.portal_interface)
         portal = client.init_session()
         console.print("   [green]OK[/green] - Conexión al portal y formulario obtenidos")
         try:
