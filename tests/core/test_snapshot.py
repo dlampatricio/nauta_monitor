@@ -22,6 +22,9 @@ def test_watch_snapshot_startup_zero_failure_and_recovery(tmp_path, monkeypatch)
     ])
 
     class Portal:
+        def __init__(self, interface=None):
+            pass
+
         def init_session(self):
             return None
 
@@ -143,6 +146,9 @@ def test_watch_keeps_last_successful_snapshot_across_restart(tmp_path, monkeypat
     }))
 
     class Portal:
+        def __init__(self, interface=None):
+            pass
+
         def init_session(self):
             return None
 

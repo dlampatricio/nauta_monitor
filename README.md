@@ -48,6 +48,7 @@ Copia `config.example.toml` a `config.toml` y rellena tus datos:
 [nauta]
 username = "usuario@nauta.com.cu"
 # password = "mi-clave"          # o usa la variable de entorno NAUTA_PASS
+portal_interface = ""            # ej. "wlo1" para consultar el portal fuera del VPN
 cup_per_hour = 12.5              # CUPs que consume cada hora (tu tarifa)
 saldo_interval = 3600            # segundos entre consultas de saldo
 speedtest_interval = 1800        # segundos entre pruebas de velocidad (0 = off)
@@ -60,6 +61,12 @@ max_mb = 50                      # tope de datos por dirección
 ```
 
 También se aceptan `NAUTA_USERNAME` y `NAUTA_PASS` como variables de entorno.
+
+En Linux, si usas un VPN que desvía el tráfico del portal, puedes configurar
+`portal_interface = "wlo1"` con la interfaz conectada a la red Nauta. Esto solo
+vincula las conexiones al portal con esa interfaz; no cambia las rutas del
+sistema ni la ruta del speedtest. La resolución DNS continúa usando el resolver
+del sistema. Deja el campo vacío para usar el enrutamiento normal.
 
 El speedtest mide contra **fast.com**, así que consume datos y tiempo de conexión
 real: con `speedtest_interval = 1800` son unos 16 minutos al día. Si te importa el

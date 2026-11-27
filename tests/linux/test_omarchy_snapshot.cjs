@@ -48,3 +48,11 @@ test("portal text is rendered by the plugin's plain-text component", () => {
   assert.match(qml, /Detail\s*\{\s*text:[^\n]+account_status/);
   assert.match(qml, /component Detail: Text\s*\{[^}]+textFormat: Text\.PlainText/);
 });
+
+test("the activity log has its own six-line scrolling viewport", () => {
+  const qml = readFileSync(resolve(__dirname, "../../nauta_monitor/platform/linux/omarchy/BarWidget.qml"), "utf8");
+  assert.match(qml, /contentHeight: fittedContentHeight\(loadedContentHeight, Commons\.Style\.space\(520\)\)/);
+  assert.match(qml, /id: activityLogView[\s\S]*?height: Commons\.Style\.space\(144\)/);
+  assert.match(qml, /id: activityLogView[\s\S]*?ScrollBar\.vertical: ScrollBar \{ policy: ScrollBar\.AsNeeded \}/);
+  assert.doesNotMatch(qml, /Flickable\s*\{\s*anchors\.fill: parent/);
+});

@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import http.server
+import socket
 import threading
 from pathlib import Path
 
 import pytest
 
-from nauta_monitor.client import PortalInitError, SecurePortalClient
+from nauta_monitor.client import PortalInitError, SecurePortalClient, _EtecsaAdapter
 
 ASSETS = Path(__file__).parent / "assets"
 
@@ -56,6 +57,23 @@ def test_full_portal_flow(portal_server):
     assert account.account_status == "Activa"
     assert account.credit == 37.82
     assert len(account.last_sessions) == 3
+
+
+@pytest.mark.skipif(
+    not hasattr(socket, "SO_BINDTODEVICE"),
+    reason="SO_BINDTODEVICE solo está disponible en Linux",
+)
+def test_etecsa_adapter_binds_connections_to_selected_interface():
+    adapter = _EtecsaAdapter(interface="wlo1")
+    try:
+        socket_options = adapter.poolmanager.connection_pool_kw["socket_options"]
+        assert (
+            socket.SOL_SOCKET,
+            socket.SO_BINDTODEVICE,
+            b"wlo1\0",
+        ) in socket_options
+    finally:
+        adapter.close()
 
 
 def test_init_error_when_portal_unreachable():

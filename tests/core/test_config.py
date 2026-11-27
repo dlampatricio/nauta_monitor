@@ -11,6 +11,7 @@ def test_defaults_with_env(monkeypatch, tmp_path):
     assert config.cup_per_hour == 12.5
     assert config.saldo_interval == 3600
     assert config.speedtest_interval == 1800
+    assert config.portal_interface is None
     assert config.speedtest.api_url == "https://api.fast.com"
     assert config.speedtest.connections == 3
     assert config.speedtest.max_duration == 10.0
@@ -31,6 +32,7 @@ def test_user_toml_overrides(tmp_path):
         "[nauta]\n"
         "username = 'user2'\n"
         "password = 'pass2'\n"
+        "portal_interface = 'wlo1'\n"
         "cup_per_hour = 15.0\n"
         "[speedtest]\n"
         "download_chunks = 50\n"  # clave antigua de LibreSpeed: se ignora
@@ -44,6 +46,7 @@ def test_user_toml_overrides(tmp_path):
     config = load_config(tmp_path / "config.toml")
     assert config.username == "user2"
     assert config.password == "pass2"
+    assert config.portal_interface == "wlo1"
     assert config.cup_per_hour == 15.0
     assert config.speedtest.connections == 2
     assert config.speedtest.max_duration == 5.0

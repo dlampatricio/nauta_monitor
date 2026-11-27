@@ -224,7 +224,7 @@ Ui.BarWidget {
     open: root.opened
     focusTarget: loadedContent
     contentWidth: fittedContentWidth(Commons.Style.space(340))
-    contentHeight: fittedContentHeight(loadedContentHeight, Commons.Style.space(390))
+    contentHeight: fittedContentHeight(loadedContentHeight, Commons.Style.space(520))
 
     content: Ui.PanelKeyCatcher {
       anchors.fill: parent
@@ -234,20 +234,10 @@ Ui.BarWidget {
       onActivateRequested: root.refresh()
       onTabRequested: direction => root.pluginBar?.switchPanelFrom(root, direction)
 
-      Flickable {
-        anchors.fill: parent
-        contentWidth: width
-        contentHeight: rows.implicitHeight
-        clip: true
-        boundsBehavior: Flickable.StopAtBounds
-        flickableDirection: Flickable.VerticalFlick
-        interactive: contentHeight > height
-        ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
-
-        Column {
-          id: rows
-          width: parent.width
-          spacing: Commons.Style.space(8)
+      Column {
+        id: rows
+        width: parent.width
+        spacing: Commons.Style.space(8)
 
         Detail {
           title: true
@@ -377,34 +367,40 @@ Ui.BarWidget {
           }
         }
 
-        ScrollView {
+        Flickable {
+          id: activityLogView
           width: parent.width
-          height: Commons.Style.space(120)
-          implicitHeight: height
+          height: Commons.Style.space(144)
+          contentWidth: width
+          contentHeight: activityLogText.height
           clip: true
+          boundsBehavior: Flickable.StopAtBounds
+          flickableDirection: Flickable.VerticalFlick
+          interactive: contentHeight > height
+          ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+
           TextArea {
+            id: activityLogText
             textFormat: TextEdit.PlainText
             readOnly: true
             wrapMode: TextEdit.WordWrap
             selectByMouse: true
             font.family: "monospace"
             font.pixelSize: Commons.Style.space(12)
-            width: parent.width
-            height: parent.height
-            implicitHeight: height
+            width: activityLogView.width
+            height: Math.max(implicitHeight, activityLogView.height)
             text: root.activityLog || strings.t("noActivity")
           }
         }
 
-          Ui.Button {
-            text: strings.t("refresh")
-            bordered: true
-            fontSize: Commons.Style.space(12)
-            width: parent.width
-            onClicked: {
-              root.refresh()
-              if (!logProc.running) logProc.running = true
-            }
+        Ui.Button {
+          text: strings.t("refresh")
+          bordered: true
+          fontSize: Commons.Style.space(12)
+          width: parent.width
+          onClicked: {
+            root.refresh()
+            if (!logProc.running) logProc.running = true
           }
         }
       }

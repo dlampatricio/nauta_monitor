@@ -24,6 +24,7 @@ Edita `config.toml`:
 [nauta]
 username = "usuario@nauta.com.cu"
 # password = "mi-clave"        # Opcional si usas variable de entorno
+portal_interface = ""           # Ej. "wlo1" para consultar ETECSA fuera del VPN
 cup_per_hour = 12.5            # CUP por hora según tu tarifa
 saldo_interval = 3600          # Segundos entre consultas de saldo
 speedtest_interval = 1800      # Segundos entre speedtests (0 = desactivado)
@@ -41,6 +42,12 @@ max_mb = 50                    # tope de datos por dirección, en MB
 min_balance_hours = 24         # Alerta cuando queden menos de estas horas
 # on_alert = "notify-send 'Nauta' 'Quedan menos de 24 horas'"
 ```
+
+En Linux, `portal_interface` es opcional. Si se configura con la interfaz
+conectada a la red Nauta, solo las conexiones al portal ETECSA usarán esa
+interfaz; el speedtest y el resto del tráfico mantienen el enrutamiento normal
+del sistema. La resolución DNS sigue usando el resolver habitual del sistema.
+Déjala vacía para usar la ruta predeterminada.
 
 ## Speedtest (fast.com)
 

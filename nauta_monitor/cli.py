@@ -237,7 +237,7 @@ def _sample_dict(config: Config, state: WatchState) -> dict:
 
 
 def command_status(config: Config, args: argparse.Namespace) -> int:
-    client = SecurePortalClient()
+    client = SecurePortalClient(interface=config.portal_interface)
     try:
         portal = client.init_session()
         raw = client.query_account_raw(config.username, config.password, portal)
@@ -277,7 +277,7 @@ def command_status(config: Config, args: argparse.Namespace) -> int:
 
 
 def _refresh_saldo(config: Config, state: WatchState) -> bool:
-    client = SecurePortalClient()
+    client = SecurePortalClient(interface=config.portal_interface)
     try:
         portal = client.init_session()
         account = client.query_account(config.username, config.password, portal)
@@ -665,6 +665,9 @@ def command_doctor(args: argparse.Namespace) -> int:
         console.print(f"   Usuario: {'configurado' if config.username else '[red]FALTA[/red]'}")
         console.print(f"   Contraseña: {'configurada' if config.password else '[red]FALTA[/red]'}")
         console.print(f"   cup_per_hour: {config.cup_per_hour}")
+        console.print(
+            f"   Interfaz del portal: {config.portal_interface or 'ruta predeterminada'}"
+        )
         console.print(f"   saldo_interval: {config.saldo_interval}s, speedtest_interval: {config.speedtest_interval}s")
         console.print(f"   Historial: {config.history_path}")
     except ConfigError as exc:
@@ -681,7 +684,7 @@ def command_doctor(args: argparse.Namespace) -> int:
     console.print(f"\n[bold]2) Portal ETECSA[/bold]")
     console.print(f"   Intentando conectar a https://secure.etecsa.net:8443 ...")
     try:
-        client = SecurePortalClient()
+        client = SecurePortalClient(interface=config.portal_interface)
         portal = client.init_session()
         console.print("   [green]OK[/green] - Conexión al portal y formulario obtenidos")
         try:
