@@ -467,17 +467,27 @@ def _update(
     saldo_interval: int,
 ) -> None:
     """Publica el resultado de cada intento; solo guarda muestras nuevas."""
+    previous_snapshot = read_snapshot(snapshot_path) if snapshot_path else None
     success = _refresh_saldo(config, state)
     if snapshot_path:
-        account_status = state.account.account_status if state.account else None
+        if success:
+            credit = state.account.credit if state.account else None
+            hours = state.hours
+            account_status = state.account.account_status if state.account else None
+            last_success_at = state.last_saldo_success_at
+        else:
+            credit = previous_snapshot["credit_cup"] if previous_snapshot else None
+            hours = previous_snapshot["hours"] if previous_snapshot else None
+            account_status = previous_snapshot["account_status"] if previous_snapshot else None
+            last_success_at = previous_snapshot["last_success_at"] if previous_snapshot else None
         try:
             write_snapshot(snapshot_path, {
                 "version": 1,
-                "credit_cup": state.account.credit if state.account else None,
-                "hours": state.hours,
+                "credit_cup": credit,
+                "hours": hours,
                 "account_status": account_status[:128] if account_status else None,
-                "last_success_at": state.last_saldo_success_at,
-                "last_attempt_at": state.last_saldo_success_at if success else int(time.time()),
+                "last_success_at": last_success_at,
+                "last_attempt_at": last_success_at if success else int(time.time()),
                 "result": "ok" if success else "error",
                 "stale_after_seconds": max(0, saldo_interval) + 60,
             })

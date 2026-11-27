@@ -27,8 +27,8 @@ def test_service_unit_uses_absolute_monitor_path_and_private_snapshot(tmp_path, 
     assert '"/opt/nauta app/bin/nauta-monitor"' in unit
     assert str(tmp_path / "config/nauta-monitor/config.toml") in unit
     assert f'ReadWritePaths="{tmp_path / "state/nauta-monitor"}"' in unit
-    assert f'--history "{tmp_path / "state/nauta-monitor/history.jsonl"}"' in unit
-    assert f'--snapshot "{tmp_path / "state/nauta-monitor/status.json"}"' in unit
+    assert f'"--history" "{tmp_path / "state/nauta-monitor/history.jsonl"}"' in unit
+    assert f'"--snapshot" "{tmp_path / "state/nauta-monitor/status.json"}"' in unit
     assert "ProtectHome=read-only" in unit
     assert (tmp_path / "state/nauta-monitor").stat().st_mode & 0o777 == 0o700
     assert calls == [
