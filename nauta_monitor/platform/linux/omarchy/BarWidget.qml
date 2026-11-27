@@ -193,7 +193,7 @@ Ui.BarWidget {
   }
 
   Timer {
-    interval: 1000
+    interval: 60000
     running: true
     repeat: true
     onTriggered: root.now = Date.now() / 1000

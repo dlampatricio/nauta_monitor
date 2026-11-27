@@ -199,8 +199,8 @@ scope `read:packages`.
 ## Plugin Omarchy
 
 El widget muestra una cuenta atrás local del tiempo estimado restante, actualizada
-cada segundo a partir de la última consulta de saldo. No consulta ETECSA cada
-segundo: la frecuencia de consulta sigue siendo la configurada en el monitor.
+cada minuto a partir de la última consulta de saldo. No consulta ETECSA cada
+minuto: la frecuencia de consulta sigue siendo la configurada en el monitor.
 La cuenta atrás descuenta el tiempo transcurrido linealmente según la tarifa
 configurada y se corrige con cada consulta exitosa, por lo que es una estimación.
 El signo `!` indica que los datos están desactualizados o que falló la última

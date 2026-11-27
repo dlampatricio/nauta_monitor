@@ -34,13 +34,14 @@ test("zero, missing, stale and failed results stay distinct", () => {
   }), 1000), "errorNoData");
 });
 
-test("the remaining-time display counts down locally to the second", () => {
+test("the remaining-time display counts down locally with minute resolution", () => {
   const oneHour = parse({ ...zero, credit_cup: 12.5, hours: 1 });
   assert.equal(model.remainingSeconds(oneHour, 1000), 3600);
   assert.equal(model.remainingSeconds(oneHour, 1061), 3539);
   assert.equal(model.remainingSeconds(oneHour, 5000), 0);
-  assert.equal(model.countdownLabel(3661, String), "1 h 01 m 01 s");
-  assert.equal(model.countdownLabel(0, String), "0 h 00 m 00 s");
+  assert.equal(model.countdownLabel(3661, String), "1 h 01 m");
+  assert.equal(model.countdownLabel(3599, String), "0 h 59 m");
+  assert.equal(model.countdownLabel(0, String), "0 h 00 m");
 });
 
 test("invalid and oversized snapshots are not displayed", () => {
@@ -55,7 +56,7 @@ test("widget shows a local countdown without account metadata", () => {
   const qml = readFileSync(resolve(__dirname, "../../nauta_monitor/platform/linux/omarchy/BarWidget.qml"), "utf8");
   assert.equal(parse(zero).account_status, markup);
   assert.match(qml, /Snapshot\.remainingSeconds\(snapshot, now\)/);
-  assert.match(qml, /interval: 1000[\s\S]*?root\.now = Date\.now\(\) \/ 1000/);
+  assert.match(qml, /interval: 60000[\s\S]*?root\.now = Date\.now\(\) \/ 1000/);
   assert.doesNotMatch(qml, /strings\.t\("(updated|balance|account)"\)/);
 });
 

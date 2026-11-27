@@ -51,7 +51,6 @@ function countdownLabel(seconds, formatNumber) {
   if (!Number.isSafeInteger(seconds) || seconds < 0) return "—";
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
-  const remainder = seconds % 60;
   const pad = value => formatNumber(value).padStart(2, "0");
-  return formatNumber(hours) + " h " + pad(minutes) + " m " + pad(remainder) + " s";
+  return formatNumber(hours) + " h " + pad(minutes) + " m";
 }
