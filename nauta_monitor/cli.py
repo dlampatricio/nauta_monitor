@@ -283,6 +283,10 @@ def _refresh_saldo(config: Config, state: WatchState) -> None:
             state.history.append((time.time(), state.hours))
         state.status = "Saldo actualizado"
     except PortalError as exc:
+        # Do not keep presenting a previous balance as current after losing
+        # access to the Nauta portal.
+        state.account = None
+        state.hours = None
         state.status = f"Error al consultar saldo: {exc}"
 
 
