@@ -4,6 +4,9 @@
 [nauta]
 username = "pepelam@nauta.com.cu"
 # password = "Mad3l4m65."
+# Interfaz por la que se consulta el portal ETECSA (p. ej. "wlo1").
+# Úsala para sacar solo esta consulta del VPN; vacío usa la ruta normal del sistema.
+portal_interface = ""
 
 # Crédito CUPs consumidos por cada hora de servicio (tu tarifa).
 cup_per_hour = 12.5

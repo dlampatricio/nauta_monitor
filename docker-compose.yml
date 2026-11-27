@@ -14,7 +14,7 @@ services:
       - ./config.toml:/app/config.toml:ro
       # Historial persistente entre reinicios del contenedor.
       - ./data:/app/data
-    command: ["nauta-monitor", "watch", "--history", "/app/data/history.jsonl"]
+    command: ["nauta-monitor", "watch", "--history", "/app/data/history.jsonl", "--snapshot", "/app/data/status.json"]
     healthcheck:
       test: ["CMD", "nauta-monitor", "status", "--no-speedtest", "--no-history", "--json"]
       interval: 5m

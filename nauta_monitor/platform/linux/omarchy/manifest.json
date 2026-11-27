@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "local.nauta-monitor",
+  "name": "Nauta Monitor",
+  "version": "1.0.0",
+  "author": "Nauta Monitor",
+  "description": "Shows the latest local Nauta Hogar balance",
+  "kinds": ["bar-widget"],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Nauta Monitor",
+    "description": "Nauta Hogar balance and estimated hours",
+    "category": "Info",
+    "defaultSection": "right",
+    "allowMultiple": false
+  }
+}

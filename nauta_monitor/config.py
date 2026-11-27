@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -40,6 +41,7 @@ class Config:
     history_path: str = "history.jsonl"
     speedtest: SpeedConfig = field(default_factory=SpeedConfig)
     alerts: AlertsConfig = field(default_factory=AlertsConfig)
+    portal_interface: str | None = None
 
 
 def _merge(defaults: dict[str, Any], user: dict[str, Any]) -> dict[str, Any]:
@@ -55,7 +57,12 @@ def _merge(defaults: dict[str, Any], user: dict[str, Any]) -> dict[str, Any]:
 def load_config(path: str | Path | None = None) -> Config:
     path = Path(path) if path else Path("config.toml")
     defaults: dict[str, Any] = {
-        "nauta": {"cup_per_hour": 12.5, "saldo_interval": 3600, "speedtest_interval": 1800},
+        "nauta": {
+            "cup_per_hour": 12.5,
+            "saldo_interval": 3600,
+            "speedtest_interval": 1800,
+            "portal_interface": "",
+        },
         "speedtest": {
             "api_url": "https://api.fast.com",
             "token": "",
@@ -74,12 +81,16 @@ def load_config(path: str | Path | None = None) -> Config:
     nauta = merged["nauta"]
     username = nauta.get("username") or os.environ.get("NAUTA_USERNAME")
     password = nauta.get("password") or os.environ.get("NAUTA_PASS")
+    portal_interface = str(nauta.get("portal_interface") or "").strip() or None
+    if portal_interface and sys.platform != "linux":
+        raise ConfigError("nauta.portal_interface solo está disponible en Linux.")
 
     speedtest = merged["speedtest"]
     alerts = merged["alerts"]
     return Config(
         username=username,
         password=password,
+        portal_interface=portal_interface,
         cup_per_hour=float(nauta.get("cup_per_hour", 12.5)),
         saldo_interval=int(nauta.get("saldo_interval", 3600)),
         speedtest_interval=int(nauta.get("speedtest_interval", 1800)),
