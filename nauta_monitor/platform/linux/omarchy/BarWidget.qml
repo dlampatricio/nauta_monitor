@@ -34,8 +34,9 @@ Ui.BarWidget {
   property string activityLog: ""
   readonly property Ui.PluginBarApi pluginBar: bar as Ui.PluginBarApi
   readonly property string freshness: Snapshot.freshness(snapshot, now)
-  readonly property string hoursText: snapshot && snapshot.hours !== null
-    ? Snapshot.hoursLabel(snapshot.hours, value => Commons.I18n.formatNumber(value, 0)) : "—"
+  readonly property var remainingSeconds: Snapshot.remainingSeconds(snapshot, now)
+  readonly property string hoursText: Snapshot.countdownLabel(
+    remainingSeconds, value => Commons.I18n.formatNumber(value, 0))
 
   function refresh() {
     now = Date.now() / 1000
@@ -191,6 +192,13 @@ Ui.BarWidget {
     onTriggered: root.refresh()
   }
 
+  Timer {
+    interval: 1000
+    running: true
+    repeat: true
+    onTriggered: root.now = Date.now() / 1000
+  }
+
   Ui.BarIconButton {
     id: button
     anchors.fill: parent
@@ -244,17 +252,7 @@ Ui.BarWidget {
           text: "Nauta Hogar"
           font.bold: true
         }
-        Detail {
-          text: strings.t("balance").arg(root.snapshot && root.snapshot.credit_cup !== null
-            ? Commons.I18n.formatNumber(root.snapshot.credit_cup, 2) + " CUP" : "—")
-        }
         Detail { text: strings.t("hours").arg(root.hoursText) }
-        Detail { text: strings.t("account").arg(root.snapshot?.account_status || "—") }
-        Detail {
-          text: strings.t("updated").arg(root.snapshot?.last_success_at
-            ? new Date(root.snapshot.last_success_at * 1000).toLocaleString(Qt.locale(Commons.I18n.formatLocale), Locale.ShortFormat)
-            : "—")
-        }
         Detail { text: strings.t(root.freshness) }
 
         Detail { text: root.serviceState }

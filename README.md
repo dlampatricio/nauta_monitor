@@ -198,10 +198,13 @@ scope `read:packages`.
 
 ## Plugin Omarchy
 
-El widget muestra las horas estimadas en la barra. Al abrirlo, ves el saldo en CUP,
-el estado de la cuenta y la hora de la última consulta exitosa. El signo `!` indica
-que no hay datos actuales: abre el panel para ver si falta el archivo, si el monitor
-dejó de actualizarlo o si falló la consulta.
+El widget muestra una cuenta atrás local del tiempo estimado restante, actualizada
+cada segundo a partir de la última consulta de saldo. No consulta ETECSA cada
+segundo: la frecuencia de consulta sigue siendo la configurada en el monitor.
+La cuenta atrás descuenta el tiempo transcurrido linealmente según la tarifa
+configurada y se corrige con cada consulta exitosa, por lo que es una estimación.
+El signo `!` indica que los datos están desactualizados o que falló la última
+consulta; el panel conserva el estado del servicio y su registro de actividad.
 
 Esta integración es para **Omarchy y el monitor en el mismo equipo**. El widget
 lee un archivo local cada 30 segundos y al abrir el panel o pulsar **Volver a

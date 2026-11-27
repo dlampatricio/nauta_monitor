@@ -23,8 +23,8 @@ const parse = (value) => model.parse(JSON.stringify(value));
 test("zero, missing, stale and failed results stay distinct", () => {
   const latest = parse(zero);
   assert.equal(latest.credit_cup, 0);
-  assert.equal(model.hoursLabel(latest.hours, String), "0 h");
-  assert.equal(model.hoursLabel(12.59, String), "12 h 35 m");
+  assert.equal(model.remainingSeconds(latest, 1000), 0);
+  assert.equal(model.remainingSeconds(null, 1000), null);
   assert.equal(model.freshness(null, 1000), "noData");
   assert.equal(model.freshness(latest, 1180), "fresh");
   assert.equal(model.freshness(latest, 1181), "stale");
@@ -32,6 +32,15 @@ test("zero, missing, stale and failed results stay distinct", () => {
   assert.equal(model.freshness(parse({
     ...zero, result: "error", last_success_at: null, hours: null, credit_cup: null, account_status: null,
   }), 1000), "errorNoData");
+});
+
+test("the remaining-time display counts down locally to the second", () => {
+  const oneHour = parse({ ...zero, credit_cup: 12.5, hours: 1 });
+  assert.equal(model.remainingSeconds(oneHour, 1000), 3600);
+  assert.equal(model.remainingSeconds(oneHour, 1061), 3539);
+  assert.equal(model.remainingSeconds(oneHour, 5000), 0);
+  assert.equal(model.countdownLabel(3661, String), "1 h 01 m 01 s");
+  assert.equal(model.countdownLabel(0, String), "0 h 00 m 00 s");
 });
 
 test("invalid and oversized snapshots are not displayed", () => {
@@ -42,11 +51,12 @@ test("invalid and oversized snapshots are not displayed", () => {
   ]) assert.equal(parse({ ...zero, ...fields }), null);
 });
 
-test("portal text is rendered by the plugin's plain-text component", () => {
+test("widget shows a local countdown without account metadata", () => {
   const qml = readFileSync(resolve(__dirname, "../../nauta_monitor/platform/linux/omarchy/BarWidget.qml"), "utf8");
   assert.equal(parse(zero).account_status, markup);
-  assert.match(qml, /Detail\s*\{\s*text:[^\n]+account_status/);
-  assert.match(qml, /component Detail: Text\s*\{[^}]+textFormat: Text\.PlainText/);
+  assert.match(qml, /Snapshot\.remainingSeconds\(snapshot, now\)/);
+  assert.match(qml, /interval: 1000[\s\S]*?root\.now = Date\.now\(\) \/ 1000/);
+  assert.doesNotMatch(qml, /strings\.t\("(updated|balance|account)"\)/);
 });
 
 test("the activity log has its own six-line scrolling viewport", () => {

@@ -39,9 +39,19 @@ function freshness(data, now) {
   return age < -60 || age > data.stale_after_seconds ? "stale" : "fresh";
 }
 
-function hoursLabel(hours, formatNumber) {
-  const minutes = Math.floor(hours * 60);
-  const wholeHours = Math.floor(minutes / 60);
-  const remainder = minutes % 60;
-  return formatNumber(wholeHours) + " h" + (remainder ? " " + formatNumber(remainder) + " m" : "");
+function remainingSeconds(data, now) {
+  if (!data || data.hours === null || data.last_success_at === null || !Number.isFinite(now)) {
+    return null;
+  }
+  const elapsed = Math.max(0, Math.floor(now - data.last_success_at));
+  return Math.max(0, Math.floor(data.hours * 3600) - elapsed);
+}
+
+function countdownLabel(seconds, formatNumber) {
+  if (!Number.isSafeInteger(seconds) || seconds < 0) return "—";
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const remainder = seconds % 60;
+  const pad = value => formatNumber(value).padStart(2, "0");
+  return formatNumber(hours) + " h " + pad(minutes) + " m " + pad(remainder) + " s";
 }
