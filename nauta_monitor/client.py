@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import socket
 import ssl
+import sys
 from dataclasses import dataclass
 
 import urllib3
+from urllib3.connection import HTTPConnection
 
 import requests
 from bs4 import BeautifulSoup
@@ -53,19 +56,40 @@ def _etecsa_ssl_context() -> ssl.SSLContext:
 
 
 class _EtecsaAdapter(HTTPAdapter):
+    def __init__(self, interface: str | None = None):
+        self._interface = interface
+        super().__init__()
+
     def init_poolmanager(self, *args, **kwargs):
         kwargs["ssl_context"] = _etecsa_ssl_context()
+        if self._interface:
+            if sys.platform != "linux" or not hasattr(socket, "SO_BINDTODEVICE"):
+                raise ValueError("La vinculación del portal a una interfaz requiere Linux.")
+            socket_options = list(HTTPConnection.default_socket_options or ())
+            socket_options.append(
+                (
+                    socket.SOL_SOCKET,
+                    socket.SO_BINDTODEVICE,
+                    self._interface.encode() + b"\0",
+                )
+            )
+            kwargs["socket_options"] = socket_options
         return super().init_poolmanager(*args, **kwargs)
 
 
 class SecurePortalClient:
-    def __init__(self, base_url: str | None = None, timeout: float = 20.0):
+    def __init__(
+        self,
+        base_url: str | None = None,
+        timeout: float = 20.0,
+        interface: str | None = None,
+    ):
         self._base_url = (base_url or BASE_URL).rstrip("/")
         self._query_servlet = f"{self._base_url}/EtecsaQueryServlet"
         self._session = requests.Session()
         self._session.headers.update(_HEADERS)
         self._session.verify = False
-        self._session.mount("https://", _EtecsaAdapter())
+        self._session.mount("https://", _EtecsaAdapter(interface=interface))
         self._timeout = timeout
 
     def init_session(self) -> PortalSession:
